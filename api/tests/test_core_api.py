@@ -209,6 +209,13 @@ def test_poc_static_ui_served(client: TestClient) -> None:
     assert "/poc/app.js" in resp.text
 
 
+def test_demo_static_ui_served(client: TestClient) -> None:
+    resp = client.get("/demo/")
+    assert resp.status_code == 200
+    assert "Gemini Music Demo Console" in resp.text
+    assert "/demo/demo.js" in resp.text
+
+
 def test_integration_surfaces_and_exports(client: TestClient) -> None:
     user_resp = client.post("/v1/users", json={"display_name": "Integration User"})
     assert user_resp.status_code == 201

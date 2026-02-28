@@ -23,7 +23,7 @@ Artifacts:
 
 1. Minute 0-1: Problem + Product thesis.
 2. Minute 1-2: Real-time adaptation loop (`project_goal_status.json`).
-3. Minute 2-3: Mantra stage mastery + progression evidence (`/poc/` + eval outputs).
+3. Minute 2-3: Run `/demo/` stage mastery and adaptation flows live, then pivot to `/poc/` for product UX.
 4. Minute 3-4: AI-kirtan contract/rubric evidence (`ai_kirtan_quality_report.json`).
 5. Minute 4-5: Ecosystem leverage demo (wearable + content adapters + webhooks).
 6. Minute 5-6: Benchmark and reliability proof (`adaptive_vs_static`, `load_latency`, `chaos`).

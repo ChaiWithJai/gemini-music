@@ -232,6 +232,7 @@ Demo artifact: `demo/latest_demo_output.json`
 After running the API server, open:
 
 - `http://localhost:8000/poc/`
+- `http://localhost:8000/demo/`
 
 Flow implemented in UI:
 
