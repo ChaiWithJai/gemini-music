@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import math
 import os
 import traceback
 from pathlib import Path
@@ -121,6 +122,7 @@ def main() -> int:
             )
 
         pass_rate = sum(1 for a in attempt_results if a["passed"]) / float(attempts)
+        pass_rate_margin = 1.96 * math.sqrt((pass_rate * (1.0 - pass_rate)) / float(attempts)) if attempts else 0.0
         case_status = "PASS" if (pass_rate == 1.0 if case.policy == "ALWAYS_PASSES" else pass_rate >= 0.66) else "FAIL"
 
         run_evals.append(
@@ -130,6 +132,10 @@ def main() -> int:
                 "skipped": False,
                 "attempts": attempts,
                 "pass_rate": round(pass_rate, 3),
+                "pass_rate_ci95": {
+                    "low": round(max(0.0, pass_rate - pass_rate_margin), 3),
+                    "high": round(min(1.0, pass_rate + pass_rate_margin), 3),
+                },
                 "status": case_status,
                 "indicators_avg": {
                     key: round(_safe_mean(values), 3) for key, values in case_indicator_values.items()
@@ -153,6 +159,12 @@ def main() -> int:
     ]
 
     run_status = "PASS" if not always_failures else "FAIL"
+    total_pass_rate = (total_passed_attempts / total_attempts) if total_attempts else 0.0
+    total_margin = (
+        1.96 * math.sqrt((total_pass_rate * (1.0 - total_pass_rate)) / float(total_attempts))
+        if total_attempts
+        else 0.0
+    )
 
     report: dict[str, Any] = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -168,7 +180,11 @@ def main() -> int:
             "executed_eval_cases": sum(1 for c in run_evals if not c.get("skipped")),
             "total_attempts": total_attempts,
             "passed_attempts": total_passed_attempts,
-            "attempt_pass_rate": round((total_passed_attempts / total_attempts), 3) if total_attempts else 0.0,
+            "attempt_pass_rate": round(total_pass_rate, 3),
+            "attempt_pass_rate_ci95": {
+                "low": round(max(0.0, total_pass_rate - total_margin), 3),
+                "high": round(min(1.0, total_pass_rate + total_margin), 3),
+            },
             "always_failures": always_failures,
         },
         "cases": run_evals,
