@@ -12,6 +12,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
 
 from gemini_music_api.db import Base, engine
 from gemini_music_api.main import app
+from gemini_music_api.services.ai_kirtan_contract import verify_payload_contract
 
 
 @pytest.fixture(autouse=True)
@@ -195,6 +196,9 @@ def test_maha_mantra_stage_eval_endpoint(client: TestClient) -> None:
     assert body["composite"] >= 0.75
     assert body["passes_golden"] is True
     assert body["metrics_used"]["voice_ratio_student"] >= 0.7
+    assert body["metrics_used"]["mastery"]["level"] in {"emerging", "developing", "mastered"}
+    assert body["metrics_used"]["mastery"]["threshold_composite"] is not None
+    assert isinstance(body["metrics_used"]["mastery"]["progression_gate_passed"], bool)
     assert len(body["feedback"]) >= 1
 
 
@@ -281,3 +285,75 @@ def test_adaptive_vs_static_experiment_endpoint(client: TestClient) -> None:
     body = resp.json()
     assert body["adaptive_mean"] > body["static_mean"]
     assert body["ci95_high"] >= body["ci95_low"]
+
+
+def test_webhook_retry_and_dead_letter_observability(client: TestClient) -> None:
+    user_resp = client.post("/v1/users", json={"display_name": "Webhook Retry User"})
+    assert user_resp.status_code == 201
+    user_id = user_resp.json()["id"]
+
+    session_resp = client.post(
+        "/v1/sessions",
+        json={
+            "user_id": user_id,
+            "intention": "Webhook resilience flow",
+            "mantra_key": "om_namah_shivaya",
+            "mood": "neutral",
+            "target_duration_minutes": 8,
+        },
+    )
+    assert session_resp.status_code == 201
+    session_id = session_resp.json()["id"]
+
+    webhook_resp = client.post(
+        "/v1/integrations/webhooks",
+        json={
+            "target_url": "https://example.org/fail-webhook",
+            "adapter_id": "content_playlist_export",
+            "event_types": ["session_ended"],
+            "is_active": True,
+        },
+    )
+    assert webhook_resp.status_code == 201
+
+    end_resp = client.post(
+        f"/v1/sessions/{session_id}/end",
+        json={"user_value_rating": 4.8, "completed_goal": True},
+    )
+    assert end_resp.status_code == 200
+
+    # Drain retries immediately to converge to dead-letter without waiting.
+    for _ in range(4):
+        process = client.post("/v1/admin/webhooks/process?batch_size=50&ignore_schedule=true")
+        assert process.status_code == 200
+
+    ecosystem = client.get("/v1/integrations/exports/ecosystem-usage/daily")
+    assert ecosystem.status_code == 200
+    body = ecosystem.json()
+    assert body["webhook_failed_attempts"] >= 1
+    assert body["webhook_dead_letters"] >= 1
+
+    north_star = client.get("/v1/analytics/business-signal/north-star")
+    assert north_star.status_code == 200
+    north_body = north_star.json()
+    assert north_body["metric_id"] == "NSM-001"
+    assert 0.0 <= north_body["value"] <= 1.0
+
+
+def test_ai_kirtan_contract_verifier_rejects_missing_arrangement_fields() -> None:
+    invalid_payload = {
+        "tempo_bpm": 72,
+        "guidance_intensity": "high",
+        "key_center": "D",
+        "reason": "calming adjustment for anxious mood",
+        "adaptation_json": {
+            "arrangement": {
+                "drone_level": "medium",
+                # missing "percussion" and "call_response"
+            },
+            "coach_actions": ["repeat_line"],
+        },
+    }
+    passed, errors = verify_payload_contract(invalid_payload)
+    assert passed is False
+    assert any(err.startswith("missing_arrangement:") for err in errors)

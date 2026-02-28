@@ -5,7 +5,7 @@ VENV ?= .venv
 PYTHON_BIN := $(VENV)/bin/python
 PIP_BIN := $(PYTHON_BIN) -m pip
 
-.PHONY: doctor bootstrap venv install lock run test evals evals_all verify_gemini demo goal_test poc_test recompute_projections drift_snapshot data_quality weekly_kpi release_gate ci
+.PHONY: doctor bootstrap venv install lock run test evals evals_all verify_gemini demo goal_test poc_test recompute_projections drift_snapshot data_quality weekly_kpi release_gate release_evidence_summary bench_adaptive load_benchmark chaos_reliability seed_repro ai_kirtan_quality adapter_verify ci
 
 doctor:
 	@echo "== Python toolchain check =="
@@ -76,7 +76,7 @@ evals: install
 	PYTHONPATH=src:. $(PYTHON_BIN) -m evals.run_evals
 
 evals_all: install
-	PYTHONPATH=src:. $(PYTHON_BIN) -m evals.run_evals --include-usually-passes --usually-attempts 3
+	PYTHONPATH=src:. $(PYTHON_BIN) -m evals.run_evals --include-usually-passes --usually-attempts 10
 
 verify_gemini: install
 	PYTHONPATH=src:. $(PYTHON_BIN) scripts/verify_gemini_skill_usage.py
@@ -102,7 +102,28 @@ data_quality: install
 weekly_kpi: install
 	PYTHONPATH=src:. $(PYTHON_BIN) scripts/generate_weekly_kpi_report.py
 
+release_evidence_summary: install
+	PYTHONPATH=src:. $(PYTHON_BIN) scripts/build_release_evidence_summary.py
+
+bench_adaptive: install
+	PYTHONPATH=src:. $(PYTHON_BIN) scripts/benchmark_adaptive_vs_static.py --runs 30 --seed 202603
+
+load_benchmark: install
+	PYTHONPATH=src:. $(PYTHON_BIN) scripts/benchmark_load_latency.py --concurrency 20 --rounds 2 --p95-target-ms 250 --max-error-rate 0.05
+
+chaos_reliability: install
+	PYTHONPATH=src:. $(PYTHON_BIN) scripts/run_chaos_reliability.py
+
+seed_repro: install
+	PYTHONPATH=src:. $(PYTHON_BIN) scripts/check_eval_seed_reproducibility.py --seed 1337 --attempts 30 --tolerance 1e-6
+
+ai_kirtan_quality: install
+	PYTHONPATH=src:. $(PYTHON_BIN) scripts/verify_ai_kirtan_quality.py
+
+adapter_verify: install
+	PYTHONPATH=src:. $(PYTHON_BIN) scripts/verify_adapter_starter_kit.py
+
 release_gate: install
 	PYTHONPATH=src:. $(PYTHON_BIN) scripts/check_release_gates.py
 
-ci: doctor test evals_all verify_gemini goal_test poc_test recompute_projections drift_snapshot data_quality weekly_kpi release_gate
+ci: doctor test evals_all verify_gemini goal_test poc_test bench_adaptive load_benchmark chaos_reliability seed_repro ai_kirtan_quality adapter_verify recompute_projections drift_snapshot data_quality weekly_kpi release_gate release_evidence_summary

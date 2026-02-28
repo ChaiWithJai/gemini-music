@@ -95,9 +95,29 @@ echo "Pushing main and tag"
 git push origin main
 git push origin "$TAG"
 
+EVIDENCE_BUNDLE="$API_DIR/evals/reports/release-evidence-${TAG}.tar.gz"
+EVIDENCE_SUMMARY="$API_DIR/evals/reports/release_evidence_summary.md"
+echo "Building release evidence bundle..."
+tar -czf "$EVIDENCE_BUNDLE" \
+  -C "$API_DIR/evals/reports" \
+  latest_report.json \
+  project_goal_status.json \
+  release_gate_status.json \
+  eval_drift_snapshot.json \
+  adaptive_vs_static_benchmark.json \
+  load_latency_benchmark.json \
+  chaos_reliability_report.json \
+  seed_reproducibility_report.json \
+  ai_kirtan_quality_report.json \
+  adapter_starter_kit_verification.json \
+  weekly_kpi_report.json \
+  release_evidence_summary.md
+
 if command -v gh >/dev/null 2>&1; then
   echo "Creating GitHub release for $TAG"
   gh release create "$TAG" --generate-notes --latest
+  echo "Uploading release evidence artifacts"
+  gh release upload "$TAG" "$EVIDENCE_BUNDLE" "$EVIDENCE_SUMMARY" --clobber
 else
   echo "gh CLI not found. Tag pushed, but GitHub release not created automatically."
 fi

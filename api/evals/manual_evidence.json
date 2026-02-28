@@ -1,9 +1,9 @@
 {
-  "frontier_novelty_manual": 0.6,
-  "user_value_proof_manual": 0.2,
-  "scale_readiness_manual": 0.3,
-  "ecosystem_leverage_manual": 0.2,
-  "safety_manual": 0.5,
-  "business_signal_manual": 0.2,
-  "eval_rigor_manual": 0.5
+  "frontier_novelty_manual": 1.0,
+  "user_value_proof_manual": 0.4,
+  "scale_readiness_manual": 0.6,
+  "ecosystem_leverage_manual": 0.6,
+  "safety_manual": 1.0,
+  "business_signal_manual": 0.7,
+  "eval_rigor_manual": 1.0
 }
