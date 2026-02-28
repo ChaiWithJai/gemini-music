@@ -85,7 +85,15 @@ function setCountdown(label) {
 }
 
 function setMicStatus(label) {
-  els.micStatus.textContent = `Mic status: ${label}`;
+  const textEl = els.micStatus.querySelector(".mic-text");
+  if (textEl) {
+    textEl.textContent = `Mic: ${label}`;
+  }
+  if (label === "capturing") {
+    els.micStatus.classList.add("capturing");
+  } else {
+    els.micStatus.classList.remove("capturing");
+  }
 }
 
 function setActiveStage(stageKey) {
@@ -95,12 +103,15 @@ function setActiveStage(stageKey) {
   if (STAGE_IDS[stageKey]) {
     document.getElementById(STAGE_IDS[stageKey]).classList.add("active");
   }
+  state.currentStage = stageKey;
+  updateNavDots();
 }
 
 function markStageDone(stageKey) {
   if (STAGE_IDS[stageKey]) {
     document.getElementById(STAGE_IDS[stageKey]).classList.add("done");
   }
+  updateNavDots();
 }
 
 function clamp01(value) {
@@ -182,38 +193,92 @@ function renderResults() {
   const container = els.resultsContainer;
   container.innerHTML = "";
 
-  ordered.forEach((key) => {
+  ordered.forEach((key, idx) => {
     const result = state.stageResults[key];
     if (!result) {
       return;
     }
 
+    const passes = result.passes_golden;
     const card = document.createElement("article");
     card.className = "result-card";
+    card.style.animationDelay = `${idx * 120}ms`;
 
-    const title = document.createElement("p");
+    const header = document.createElement("div");
+    header.className = "result-header";
+
+    const title = document.createElement("span");
     title.className = "result-title";
-    title.textContent = `${STAGE_TITLES[key]} ${result.passes_golden ? "PASS" : "REVIEW"}`;
+    title.textContent = STAGE_TITLES[key];
 
-    const metrics = document.createElement("p");
-    metrics.className = "result-metrics";
-    metrics.textContent = [
-      `Discipline ${result.discipline.toFixed(3)}`,
-      `Resonance ${result.resonance.toFixed(3)}`,
-      `Coherence ${result.coherence.toFixed(3)}`,
-      `Composite ${result.composite.toFixed(3)}`,
-    ].join(" | ");
+    const badge = document.createElement("span");
+    badge.className = `badge ${passes ? "pass" : "review-badge"}`;
+    badge.textContent = passes ? "PASS" : "REVIEW";
+
+    header.appendChild(title);
+    header.appendChild(badge);
+
+    const bars = document.createElement("div");
+    bars.className = "score-bars";
+
+    const metrics = [
+      { label: "Discipline", cls: "discipline", value: result.discipline },
+      { label: "Resonance", cls: "resonance", value: result.resonance },
+      { label: "Coherence", cls: "coherence", value: result.coherence },
+    ];
+
+    metrics.forEach((m, mIdx) => {
+      const row = document.createElement("div");
+      row.className = "score-row";
+
+      const lbl = document.createElement("span");
+      lbl.className = "score-label";
+      lbl.textContent = m.label;
+
+      const track = document.createElement("div");
+      track.className = "score-track";
+      const fill = document.createElement("div");
+      fill.className = `score-fill ${m.cls}`;
+      track.appendChild(fill);
+
+      const val = document.createElement("span");
+      val.className = "score-value";
+      val.textContent = "0.000";
+
+      row.appendChild(lbl);
+      row.appendChild(track);
+      row.appendChild(val);
+      bars.appendChild(row);
+
+      animateBar(fill, clamp01(m.value) * 100, (idx * 120) + (mIdx * 80));
+      animateCounter(val, m.value, 600, 3);
+    });
+
+    const composite = document.createElement("div");
+    composite.className = "composite-score";
+    const compLabel = document.createElement("span");
+    compLabel.className = "composite-label";
+    compLabel.textContent = "Composite";
+    const compValue = document.createElement("span");
+    compValue.className = "composite-value";
+    compValue.textContent = "0.000";
+    composite.appendChild(compLabel);
+    composite.appendChild(compValue);
+    animateCounter(compValue, result.composite, 800, 3);
 
     const feedbackList = document.createElement("ul");
     feedbackList.className = "result-feedback";
-    result.feedback.forEach((item) => {
-      const li = document.createElement("li");
-      li.textContent = item;
-      feedbackList.appendChild(li);
-    });
+    if (result.feedback) {
+      result.feedback.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        feedbackList.appendChild(li);
+      });
+    }
 
-    card.appendChild(title);
-    card.appendChild(metrics);
+    card.appendChild(header);
+    card.appendChild(bars);
+    card.appendChild(composite);
     card.appendChild(feedbackList);
     container.appendChild(card);
   });
@@ -226,16 +291,20 @@ function renderResults() {
     overall_composite: overall,
     final_artifacts: state.finalArtifacts,
   };
-  els.finalJson.textContent = JSON.stringify(payload, null, 2);
+  els.finalJson.innerHTML = syntaxHighlightJson(JSON.stringify(payload, null, 2));
 }
 
 async function runCountdown(seconds, onTick) {
   let remaining = seconds;
   onTick(remaining);
+  const countdownEl = els.countdownLabel;
   return new Promise((resolve) => {
     const intervalId = window.setInterval(() => {
       remaining -= 1;
       onTick(Math.max(remaining, 0));
+      countdownEl.classList.remove("tick");
+      void countdownEl.offsetWidth;
+      countdownEl.classList.add("tick");
       if (remaining <= 0) {
         window.clearInterval(intervalId);
         resolve();
@@ -819,6 +888,98 @@ async function runIndependentStage() {
   setCountdown("Done");
 }
 
+/* ===== Animation Utilities ===== */
+
+function animateCounter(el, target, duration, decimals) {
+  const start = performance.now();
+  const dp = decimals || 3;
+  function tick(now) {
+    const elapsed = now - start;
+    const t = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = (target * eased).toFixed(dp);
+    if (t < 1) {
+      requestAnimationFrame(tick);
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+function animateBar(el, targetPercent, delay) {
+  setTimeout(() => {
+    el.style.width = `${targetPercent}%`;
+  }, delay || 0);
+}
+
+function updateNavDots() {
+  const stageOrder = ["listen", "guided", "call_response", "recap", "independent"];
+  const dots = document.querySelectorAll(".nav-dot");
+  dots.forEach((dot, i) => {
+    const key = stageOrder[i];
+    const stageEl = document.getElementById(STAGE_IDS[key]);
+    dot.classList.remove("active", "done");
+    if (stageEl && stageEl.classList.contains("done")) {
+      dot.classList.add("done");
+    } else if (stageEl && stageEl.classList.contains("active")) {
+      dot.classList.add("active");
+    }
+  });
+}
+
+function syntaxHighlightJson(json) {
+  return json.replace(
+    /("(?:\\.|[^"\\])*")\s*:/g,
+    '<span class="json-key">$1</span>:'
+  ).replace(
+    /:\s*("(?:\\.|[^"\\])*")/g,
+    ': <span class="json-string">$1</span>'
+  ).replace(
+    /:\s*(\d+\.?\d*)/g,
+    ': <span class="json-number">$1</span>'
+  ).replace(
+    /:\s*(true|false)/g,
+    ': <span class="json-bool">$1</span>'
+  ).replace(
+    /:\s*(null)/g,
+    ': <span class="json-null">$1</span>'
+  );
+}
+
+function initWordReveal() {
+  const h1 = document.querySelector("h1.word-reveal");
+  if (!h1) return;
+  const html = h1.innerHTML;
+  let wordIndex = 0;
+  const wrapped = html.replace(/(<em>.*?<\/em>|\S+)/g, (match) => {
+    const delay = 200 + wordIndex * 80;
+    wordIndex++;
+    if (match.startsWith("<em>")) {
+      return `<span class="word" style="animation-delay:${delay}ms">${match}</span>`;
+    }
+    return `<span class="word" style="animation-delay:${delay}ms">${match}</span>`;
+  });
+  h1.innerHTML = wrapped;
+}
+
+function initRevealAnimations() {
+  const targets = document.querySelectorAll(".reveal-up");
+  if (!targets.length) return;
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry, i) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => {
+            entry.target.classList.add("revealed");
+          }, i * 100);
+          observer.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.1, rootMargin: "0px 0px -40px 0px" }
+  );
+  targets.forEach((el) => observer.observe(el));
+}
+
 function bindEvents() {
   els.initSessionBtn.dataset.enabled = "true";
 
@@ -846,3 +1007,5 @@ function setInitialUiState() {
 
 bindEvents();
 setInitialUiState();
+initWordReveal();
+initRevealAnimations();

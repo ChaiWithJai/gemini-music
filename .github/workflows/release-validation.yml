@@ -1,0 +1,37 @@
+name: release-validation
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Bootstrap + Install
+        run: |
+          make bootstrap
+          make install
+
+      - name: Full Release Gate Chain
+        run: make ci
+
+      - name: Upload Release Evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-${{ github.ref_name }}
+          path: |
+            api/evals/reports/*.json
