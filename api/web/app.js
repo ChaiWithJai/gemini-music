@@ -9,6 +9,49 @@ const STAGE_IDS = {
   independent: "stage-independent",
 };
 
+const STAGE_BUTTON_IDS = {
+  listen: "listenBtn",
+  guided: "guidedBtn",
+  call_response: "callResponseBtn",
+  recap: "recapBtn",
+  independent: "independentBtn",
+};
+
+const STAGE_ORDER = ["listen", "guided", "call_response", "recap", "independent"];
+
+const STAGE_COPY = {
+  listen: {
+    title: "Listen (30s)",
+    now: "You're here: absorb pronunciation and cadence.",
+    next: "Next in 45s guided follow-along.",
+    lock: "Why locked: initialize a session first.",
+  },
+  guided: {
+    title: "Guided Follow-Along",
+    now: "You're here: sing with the track and capture metrics.",
+    next: "Next: alternate guru and student turns.",
+    lock: "Why locked: complete Listen first.",
+  },
+  call_response: {
+    title: "Call-Response",
+    now: "You're here: take your turn when guru audio mutes.",
+    next: "Next: inspect recap before solo performance.",
+    lock: "Why locked: complete Guided first.",
+  },
+  recap: {
+    title: "Performance Recap",
+    now: "You're here: review scorecards and feedback.",
+    next: "Next: start independent chanting.",
+    lock: "Why locked: complete Call-Response first.",
+  },
+  independent: {
+    title: "Independent Performance",
+    now: "You're here: perform solo for final scoring and Bhav.",
+    next: "Next: flow complete.",
+    lock: "Why locked: view recap first.",
+  },
+};
+
 const STAGE_TITLES = {
   guided: "Guided Follow-Along",
   call_response: "Call-Response",
@@ -26,6 +69,12 @@ const state = {
   stageResults: {},
   finalArtifacts: {},
   busy: false,
+  mediaMode: "youtube",
+  mediaMuted: false,
+  fallbackAudioCtx: null,
+  fallbackMasterGain: null,
+  fallbackNodes: [],
+  queueEventKey: null,
 };
 
 const els = {
@@ -42,6 +91,16 @@ const els = {
   callResponseBtn: document.getElementById("callResponseBtn"),
   recapBtn: document.getElementById("recapBtn"),
   independentBtn: document.getElementById("independentBtn"),
+  queueNowTitle: document.getElementById("queueNowTitle"),
+  queueNowCopy: document.getElementById("queueNowCopy"),
+  queueNextTitle: document.getElementById("queueNextTitle"),
+  queueNextCopy: document.getElementById("queueNextCopy"),
+  queueLaterCopy: document.getElementById("queueLaterCopy"),
+  queuePrimaryBtn: document.getElementById("queuePrimaryBtn"),
+  mediaStatus: document.getElementById("mediaStatus"),
+  useFallbackBtn: document.getElementById("useFallbackBtn"),
+  retryYoutubeBtn: document.getElementById("retryYoutubeBtn"),
+  playerContainer: document.getElementById("player"),
   resultsContainer: document.getElementById("resultsContainer"),
   finalJson: document.getElementById("finalJson"),
 };
@@ -63,10 +122,16 @@ window.onYouTubeIframeAPIReady = function onYouTubeIframeAPIReady() {
     events: {
       onReady: () => {
         state.playerReady = true;
-        setCountdown("Player ready");
+        setMediaStatus("Media mode: YouTube");
         if (playerReadyResolver) {
           playerReadyResolver();
         }
+      },
+      onError: () => {
+        setMediaStatus("YouTube playback blocked. Switching to fallback track.");
+        switchToFallbackTrack("YouTube error callback").catch((err) => {
+          console.warn("fallback handoff failed", err);
+        });
       },
     },
   });
@@ -105,13 +170,299 @@ function setActiveStage(stageKey) {
   }
   state.currentStage = stageKey;
   updateNavDots();
+  updateInteractionQueue();
 }
 
 function markStageDone(stageKey) {
   if (STAGE_IDS[stageKey]) {
     document.getElementById(STAGE_IDS[stageKey]).classList.add("done");
   }
+  syncStageCtaLabels();
   updateNavDots();
+  updateInteractionQueue();
+}
+
+function getStageButton(stageKey) {
+  const id = STAGE_BUTTON_IDS[stageKey];
+  if (!id) {
+    return null;
+  }
+  return document.getElementById(id);
+}
+
+function setMediaStatus(message) {
+  if (els.mediaStatus) {
+    els.mediaStatus.textContent = message;
+  }
+}
+
+function setMediaMode(mode) {
+  state.mediaMode = mode;
+  if (els.playerContainer) {
+    els.playerContainer.classList.toggle("fallback-active", mode === "fallback");
+  }
+  if (els.retryYoutubeBtn) {
+    els.retryYoutubeBtn.disabled = mode !== "fallback";
+  }
+  if (els.useFallbackBtn) {
+    els.useFallbackBtn.disabled = mode === "fallback";
+  }
+}
+
+function syncStageCtaLabels() {
+  STAGE_ORDER.forEach((stageKey) => {
+    const btn = getStageButton(stageKey);
+    if (!btn) {
+      return;
+    }
+    const stageEl = document.getElementById(STAGE_IDS[stageKey]);
+    const done = Boolean(stageEl && stageEl.classList.contains("done"));
+    const startLabel = btn.dataset.startLabel || btn.textContent.trim();
+    const replayLabel = btn.dataset.replayLabel || `Replay ${startLabel}`;
+    btn.textContent = done ? replayLabel : startLabel;
+  });
+}
+
+function computeQueueState() {
+  const statuses = {};
+  STAGE_ORDER.forEach((stageKey) => {
+    const stageEl = document.getElementById(STAGE_IDS[stageKey]);
+    const btn = getStageButton(stageKey);
+    if (stageEl && stageEl.classList.contains("done")) {
+      statuses[stageKey] = "done";
+      return;
+    }
+    if (btn && btn.dataset.enabled === "true") {
+      statuses[stageKey] = "ready";
+      return;
+    }
+    statuses[stageKey] = "locked";
+  });
+
+  const busyNow = state.busy && STAGE_ORDER.includes(state.currentStage) ? state.currentStage : null;
+  const readyNow = STAGE_ORDER.find((stageKey) => statuses[stageKey] === "ready") || null;
+  const nowKey = busyNow || readyNow;
+  const allDone = STAGE_ORDER.every((stageKey) => statuses[stageKey] === "done");
+
+  const startIndex = nowKey ? STAGE_ORDER.indexOf(nowKey) + 1 : 0;
+  const nextKey = STAGE_ORDER.slice(startIndex).find((stageKey) => statuses[stageKey] !== "done") || null;
+  const laterKeys = STAGE_ORDER.filter((stageKey) => statuses[stageKey] === "locked");
+
+  return {
+    statuses,
+    nowKey,
+    nextKey,
+    laterKeys,
+    allDone,
+  };
+}
+
+function setQueuePrimaryAction(action, label, disabled) {
+  if (!els.queuePrimaryBtn) {
+    return;
+  }
+  els.queuePrimaryBtn.dataset.action = action || "";
+  els.queuePrimaryBtn.textContent = label;
+  els.queuePrimaryBtn.disabled = disabled;
+}
+
+function emitQueueTelemetry(snapshot) {
+  if (!state.sessionId) {
+    return;
+  }
+  const payload = {
+    now: snapshot.nowKey,
+    next: snapshot.nextKey,
+    later: snapshot.laterKeys,
+    statuses: snapshot.statuses,
+    media_mode: state.mediaMode,
+  };
+  const key = JSON.stringify(payload);
+  if (state.queueEventKey === key) {
+    return;
+  }
+  state.queueEventKey = key;
+  api(`/v1/sessions/${state.sessionId}/events`, {
+    method: "POST",
+    body: JSON.stringify({
+      event_type: "interaction_queue_state",
+      client_event_id: `queue:${Date.now()}`,
+      payload,
+    }),
+  }).catch((err) => {
+    console.warn("interaction queue telemetry failed", err);
+  });
+}
+
+function updateInteractionQueue() {
+  if (!els.queuePrimaryBtn) {
+    return;
+  }
+
+  if (!state.sessionId) {
+    els.queueNowTitle.textContent = "Initialize Session";
+    els.queueNowCopy.textContent = "You're here. Start a session to unlock the guided queue.";
+    els.queueNextTitle.textContent = STAGE_COPY.listen.title;
+    els.queueNextCopy.textContent = STAGE_COPY.listen.next;
+    els.queueLaterCopy.textContent = "Why locked: complete setup before guided practice.";
+    setQueuePrimaryAction("init", "Initialize Session", state.busy || els.initSessionBtn.disabled);
+    return;
+  }
+
+  const snapshot = computeQueueState();
+  if (snapshot.allDone) {
+    els.queueNowTitle.textContent = "Flow Complete";
+    els.queueNowCopy.textContent = "You're here. Review output or replay any completed stage.";
+    els.queueNextTitle.textContent = "Start New Session";
+    els.queueNextCopy.textContent = "Next: initialize another practice run.";
+    els.queueLaterCopy.textContent = "Why locked: none. All stages are complete.";
+    setQueuePrimaryAction("init", "Start New Session", state.busy);
+    emitQueueTelemetry(snapshot);
+    return;
+  }
+
+  if (snapshot.nowKey) {
+    const nowCopy = STAGE_COPY[snapshot.nowKey];
+    const nowButton = getStageButton(snapshot.nowKey);
+    els.queueNowTitle.textContent = nowCopy.title;
+    els.queueNowCopy.textContent = nowCopy.now;
+    const actionLabel = nowButton ? (nowButton.dataset.startLabel || nowButton.textContent.trim()) : nowCopy.title;
+    setQueuePrimaryAction(snapshot.nowKey, actionLabel, state.busy || !nowButton || nowButton.disabled);
+  } else {
+    els.queueNowTitle.textContent = "Waiting For Input";
+    els.queueNowCopy.textContent = "You're here. Complete the required step to continue.";
+    setQueuePrimaryAction("", "Waiting", true);
+  }
+
+  if (snapshot.nextKey) {
+    const nextCopy = STAGE_COPY[snapshot.nextKey];
+    els.queueNextTitle.textContent = nextCopy.title;
+    els.queueNextCopy.textContent = nextCopy.next;
+  } else {
+    els.queueNextTitle.textContent = "No pending stage";
+    els.queueNextCopy.textContent = "Next: finalize or start a new session.";
+  }
+
+  if (snapshot.laterKeys.length) {
+    els.queueLaterCopy.textContent = snapshot.laterKeys.map((stageKey) => STAGE_COPY[stageKey].lock).join(" ");
+  } else {
+    els.queueLaterCopy.textContent = "Why locked: none.";
+  }
+
+  emitQueueTelemetry(snapshot);
+}
+
+async function ensureFallbackTrack() {
+  if (state.fallbackAudioCtx && state.fallbackMasterGain) {
+    return;
+  }
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) {
+    throw new Error("Web Audio API is unavailable; cannot start fallback track.");
+  }
+
+  const context = new AudioCtx();
+  const masterGain = context.createGain();
+  masterGain.gain.value = 0;
+  masterGain.connect(context.destination);
+
+  const nodes = [
+    { freq: 196.0, type: "sine", level: 0.05 },
+    { freq: 293.66, type: "triangle", level: 0.035 },
+    { freq: 392.0, type: "sine", level: 0.02 },
+  ].map((voice) => {
+    const osc = context.createOscillator();
+    const gain = context.createGain();
+    osc.type = voice.type;
+    osc.frequency.value = voice.freq;
+    gain.gain.value = voice.level;
+    osc.connect(gain);
+    gain.connect(masterGain);
+    osc.start();
+    return { osc, gain };
+  });
+
+  state.fallbackAudioCtx = context;
+  state.fallbackMasterGain = masterGain;
+  state.fallbackNodes = nodes;
+}
+
+function setMediaMuted(muted) {
+  state.mediaMuted = Boolean(muted);
+  if (state.mediaMode === "fallback") {
+    if (!state.fallbackAudioCtx || !state.fallbackMasterGain) {
+      return;
+    }
+    const now = state.fallbackAudioCtx.currentTime;
+    const target = state.mediaMuted ? 0 : 0.11;
+    state.fallbackMasterGain.gain.cancelScheduledValues(now);
+    state.fallbackMasterGain.gain.setTargetAtTime(target, now, 0.08);
+    return;
+  }
+  if (!state.player) {
+    return;
+  }
+  if (state.mediaMuted) {
+    state.player.mute();
+  } else {
+    state.player.unMute();
+  }
+}
+
+function stopFallbackTrack() {
+  if (!state.fallbackAudioCtx || !state.fallbackMasterGain) {
+    return;
+  }
+  const now = state.fallbackAudioCtx.currentTime;
+  state.fallbackMasterGain.gain.cancelScheduledValues(now);
+  state.fallbackMasterGain.gain.setTargetAtTime(0, now, 0.08);
+}
+
+async function playFallbackTrack(muted) {
+  await ensureFallbackTrack();
+  if (state.fallbackAudioCtx && state.fallbackAudioCtx.state === "suspended") {
+    await state.fallbackAudioCtx.resume();
+  }
+  setMediaMode("fallback");
+  setMediaMuted(muted);
+}
+
+async function switchToFallbackTrack(reason) {
+  await playFallbackTrack(state.mediaMuted);
+  setMediaStatus(`Media mode: Fallback track (${reason})`);
+}
+
+async function waitForYouTubePlaying(timeoutMs) {
+  if (!state.player || !window.YT) {
+    return false;
+  }
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const playerState = state.player.getPlayerState ? state.player.getPlayerState() : null;
+    if (playerState === YT.PlayerState.PLAYING) {
+      return true;
+    }
+    await wait(200);
+  }
+  return false;
+}
+
+async function playYouTubeAt(seconds, muted) {
+  const ready = await waitForPlayer();
+  if (!ready || !state.player) {
+    return false;
+  }
+  setMediaMode("youtube");
+  stopFallbackTrack();
+  setMediaMuted(muted);
+  state.player.seekTo(seconds, true);
+  state.player.playVideo();
+  const started = await waitForYouTubePlaying(2000);
+  if (!started) {
+    return false;
+  }
+  setMediaStatus("Media mode: YouTube");
+  return true;
 }
 
 function clamp01(value) {
@@ -130,9 +481,13 @@ function wait(ms) {
 
 async function waitForPlayer() {
   if (state.playerReady) {
-    return;
+    return true;
   }
-  await playerReadyPromise;
+  const timeout = await Promise.race([
+    playerReadyPromise.then(() => false),
+    wait(2000).then(() => true),
+  ]);
+  return !timeout;
 }
 
 async function api(path, options = {}) {
@@ -567,17 +922,23 @@ class VoiceCapture {
 }
 
 async function playAt(seconds, muted) {
-  await waitForPlayer();
-  if (muted) {
-    state.player.mute();
-  } else {
-    state.player.unMute();
+  state.mediaMuted = Boolean(muted);
+  if (state.mediaMode === "fallback") {
+    await playFallbackTrack(state.mediaMuted);
+    return;
   }
-  state.player.seekTo(seconds, true);
-  state.player.playVideo();
+  const started = await playYouTubeAt(seconds, state.mediaMuted);
+  if (!started) {
+    setMediaStatus("YouTube blocked. Fallback track engaged.");
+    await switchToFallbackTrack("YouTube unavailable");
+  }
 }
 
 function pauseVideo() {
+  if (state.mediaMode === "fallback") {
+    stopFallbackTrack();
+    return;
+  }
   if (!state.player) {
     return;
   }
@@ -666,6 +1027,7 @@ function setButtonsDuringRun(disabled) {
       btn.disabled = disabled || btn.dataset.enabled !== "true";
     }
   });
+  updateInteractionQueue();
 }
 
 function allowButton(btn) {
@@ -673,6 +1035,7 @@ function allowButton(btn) {
   if (!state.busy) {
     btn.disabled = false;
   }
+  updateInteractionQueue();
 }
 
 async function runStep(stepFn) {
@@ -692,6 +1055,7 @@ async function runStep(stepFn) {
   } finally {
     state.busy = false;
     setButtonsDuringRun(false);
+    updateInteractionQueue();
   }
 }
 
@@ -730,14 +1094,32 @@ async function initSession() {
 
   state.userId = user.id;
   state.sessionId = session.id;
+  state.queueEventKey = null;
   state.stageResults = {};
   state.finalArtifacts = {};
+  STAGE_ORDER.forEach((stageKey) => {
+    const stageEl = document.getElementById(STAGE_IDS[stageKey]);
+    const btn = getStageButton(stageKey);
+    if (stageEl) {
+      stageEl.classList.remove("active", "done");
+    }
+    if (btn) {
+      btn.dataset.enabled = "false";
+      btn.disabled = true;
+    }
+  });
+  state.currentStage = "idle";
+  syncStageCtaLabels();
+  updateNavDots();
   renderResults();
 
   els.sessionMeta.textContent = `User ${user.id} | Session ${session.id} | Lineage ${state.lineage}`;
+  els.initSessionBtn.classList.remove("primary");
+  els.initSessionBtn.textContent = "Reinitialize Session";
 
   setStageLabel("Ready for 30-second listening");
   allowButton(els.listenBtn);
+  updateInteractionQueue();
 }
 
 async function runListenStage() {
@@ -790,11 +1172,7 @@ async function runGuidedStage() {
 async function callTurn({ label, phase, muted, round, totalRounds, seconds }) {
   state.callPhase = phase;
   setTurn(`${label} ${round}/${totalRounds}`);
-  if (muted) {
-    state.player.mute();
-  } else {
-    state.player.unMute();
-  }
+  setMediaMuted(muted);
 
   await runCountdown(seconds, (remaining) => {
     setCountdown(`${label} ${remaining}s`);
@@ -833,7 +1211,7 @@ async function runCallResponseStage() {
   }
 
   pauseVideo();
-  state.player.unMute();
+  setMediaMuted(false);
   const metrics = await capture.stop();
   setMicStatus("stopped");
 
@@ -868,9 +1246,7 @@ async function runIndependentStage() {
   const capture = new VoiceCapture(() => "independent");
   await capture.start();
 
-  if (state.player) {
-    state.player.mute();
-  }
+  setMediaMuted(true);
 
   await runCountdown(30, (remaining) => {
     setCountdown(`${remaining}s`);
@@ -886,6 +1262,7 @@ async function runIndependentStage() {
   setStageLabel("Independent stage complete");
   setTurn("Finished");
   setCountdown("Done");
+  setMediaMuted(false);
 }
 
 /* ===== Animation Utilities ===== */
@@ -912,10 +1289,9 @@ function animateBar(el, targetPercent, delay) {
 }
 
 function updateNavDots() {
-  const stageOrder = ["listen", "guided", "call_response", "recap", "independent"];
   const dots = document.querySelectorAll(".nav-dot");
   dots.forEach((dot, i) => {
-    const key = stageOrder[i];
+    const key = STAGE_ORDER[i];
     const stageEl = document.getElementById(STAGE_IDS[key]);
     dot.classList.remove("active", "done");
     if (stageEl && stageEl.classList.contains("done")) {
@@ -989,6 +1365,32 @@ function bindEvents() {
   els.callResponseBtn.addEventListener("click", () => runStep(runCallResponseStage));
   els.recapBtn.addEventListener("click", () => runStep(showRecap));
   els.independentBtn.addEventListener("click", () => runStep(runIndependentStage));
+  els.queuePrimaryBtn.addEventListener("click", () => {
+    const action = els.queuePrimaryBtn.dataset.action;
+    if (!action) {
+      return;
+    }
+    if (action === "init") {
+      if (!els.initSessionBtn.disabled) {
+        els.initSessionBtn.click();
+      }
+      return;
+    }
+    const btn = getStageButton(action);
+    if (btn && !btn.disabled) {
+      btn.click();
+    }
+  });
+  els.useFallbackBtn.addEventListener("click", () => {
+    switchToFallbackTrack("manual selection").catch((err) => {
+      console.warn("manual fallback failed", err);
+    });
+  });
+  els.retryYoutubeBtn.addEventListener("click", () => {
+    setMediaMode("youtube");
+    stopFallbackTrack();
+    setMediaStatus("Media mode: YouTube (retry armed for next playback)");
+  });
 }
 
 function setInitialUiState() {
@@ -996,12 +1398,16 @@ function setInitialUiState() {
   setTurn("-");
   setCountdown("-");
   setMicStatus("idle");
+  setMediaMode("youtube");
+  setMediaStatus("Media mode: YouTube");
 
   [els.listenBtn, els.guidedBtn, els.callResponseBtn, els.recapBtn, els.independentBtn].forEach((btn) => {
     btn.dataset.enabled = "false";
     btn.disabled = true;
   });
 
+  syncStageCtaLabels();
+  updateInteractionQueue();
   renderResults();
 }
 
