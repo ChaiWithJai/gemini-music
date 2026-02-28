@@ -1,0 +1,81 @@
+{
+  "track_id": "maha_mantra_lZXeUhUc8PM_v1",
+  "source": "transcript_manual_v1",
+  "video_id": "lZXeUhUc8PM",
+  "listen_stage": {
+    "start_sec": 18,
+    "end_sec": 48,
+    "duration_sec": 30
+  },
+  "guided_stage": {
+    "start_sec": 48,
+    "end_sec": 93,
+    "duration_sec": 45
+  },
+  "call_response_stage": {
+    "start_sec": 138,
+    "end_sec": 186,
+    "duration_sec": 48,
+    "rounds": [
+      {
+        "round": 1,
+        "guru_start": 138,
+        "guru_end": 141,
+        "student_start": 141,
+        "student_end": 144
+      },
+      {
+        "round": 2,
+        "guru_start": 144,
+        "guru_end": 147,
+        "student_start": 147,
+        "student_end": 150
+      },
+      {
+        "round": 3,
+        "guru_start": 150,
+        "guru_end": 153,
+        "student_start": 153,
+        "student_end": 156
+      },
+      {
+        "round": 4,
+        "guru_start": 156,
+        "guru_end": 159,
+        "student_start": 159,
+        "student_end": 162
+      },
+      {
+        "round": 5,
+        "guru_start": 162,
+        "guru_end": 165,
+        "student_start": 165,
+        "student_end": 168
+      },
+      {
+        "round": 6,
+        "guru_start": 168,
+        "guru_end": 171,
+        "student_start": 171,
+        "student_end": 174
+      },
+      {
+        "round": 7,
+        "guru_start": 174,
+        "guru_end": 177,
+        "student_start": 177,
+        "student_end": 180
+      },
+      {
+        "round": 8,
+        "guru_start": 180,
+        "guru_end": 183,
+        "student_start": 183,
+        "student_end": 186
+      }
+    ]
+  },
+  "independent_stage": {
+    "duration_sec": 30
+  }
+}

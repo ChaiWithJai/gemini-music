@@ -4,7 +4,7 @@ import datetime as dt
 from typing import Literal
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class APIModel(BaseModel):
@@ -160,6 +160,114 @@ class MahaMantraEvalOut(BaseModel):
     passes_golden: bool
     feedback: list[str]
     metrics_used: dict[str, Any]
+
+
+class MahaTimingStageWindow(BaseModel):
+    start_sec: float = Field(ge=0)
+    end_sec: float = Field(ge=0)
+    duration_sec: float = Field(ge=1)
+
+
+class MahaTimingCallResponseRound(BaseModel):
+    round: int = Field(ge=1)
+    guru_start: float = Field(ge=0)
+    guru_end: float = Field(ge=0)
+    student_start: float = Field(ge=0)
+    student_end: float = Field(ge=0)
+
+
+class MahaTimingCallResponseWindow(MahaTimingStageWindow):
+    rounds: list[MahaTimingCallResponseRound] = Field(default_factory=list)
+
+
+class MahaTimingIndependentWindow(BaseModel):
+    duration_sec: float = Field(ge=1)
+
+
+class MahaTimingOut(BaseModel):
+    track_id: str
+    source: str
+    video_id: str
+    listen_stage: MahaTimingStageWindow
+    guided_stage: MahaTimingStageWindow
+    call_response_stage: MahaTimingCallResponseWindow
+    independent_stage: MahaTimingIndependentWindow
+
+
+class AudioChunkFeaturesIn(BaseModel):
+    duration_seconds: float | None = Field(default=None, ge=0.1, le=600)
+    total_frames: int | None = Field(default=None, ge=0)
+    voiced_frames: int | None = Field(default=None, ge=0)
+    voice_ratio_total: float | None = Field(default=None, ge=0, le=1)
+    voice_ratio_student: float | None = Field(default=None, ge=0, le=1)
+    voice_ratio_guru: float | None = Field(default=None, ge=0, le=1)
+    pitch_stability: float | None = Field(default=None, ge=0, le=1)
+    cadence_bpm: float | None = Field(default=None, ge=20, le=220)
+    cadence_consistency: float | None = Field(default=None, ge=0, le=1)
+    avg_energy: float | None = Field(default=None, ge=0, le=1)
+    snr_db: float | None = Field(default=None, ge=-20, le=120)
+
+
+class AudioChunkIn(BaseModel):
+    stage: Literal["guided", "call_response", "independent"]
+    chunk_id: str = Field(min_length=1, max_length=120)
+    seq: int = Field(default=0, ge=0, le=1_000_000)
+    t_start_ms: int = Field(ge=0)
+    t_end_ms: int = Field(ge=1)
+    sample_rate_hz: int = Field(default=16000, ge=8000, le=192000)
+    encoding: str = Field(default="browser_metrics_v1", min_length=1, max_length=40)
+    blob_uri: str | None = Field(default=None, max_length=500)
+    lineage: str = Field(default="vaishnavism", min_length=1, max_length=60)
+    golden_profile: str = Field(default="maha_mantra_v1", min_length=1, max_length=40)
+    round_index: int | None = Field(default=None, ge=1, le=256)
+    features: AudioChunkFeaturesIn = Field(default_factory=AudioChunkFeaturesIn)
+
+    @model_validator(mode="after")
+    def validate_time_window(self) -> "AudioChunkIn":
+        if self.t_end_ms <= self.t_start_ms:
+            raise ValueError("t_end_ms must be greater than t_start_ms")
+        return self
+
+
+class StageScoreProjectionOut(APIModel):
+    id: int
+    session_id: str
+    stage: str
+    lineage_id: str
+    golden_profile: str
+    discipline: float
+    resonance: float
+    coherence: float
+    composite: float
+    passes_golden: bool
+    confidence: float
+    coverage_ratio: float
+    source_chunk_count: int
+    metrics_json: dict[str, Any]
+    feedback_json: list[str]
+    updated_at: dt.datetime
+
+
+class AudioChunkIngestOut(APIModel):
+    id: int
+    session_id: str
+    stage: str
+    round_index: int | None
+    chunk_id: str
+    seq: int
+    t_start_ms: int
+    t_end_ms: int
+    sample_rate_hz: int
+    encoding: str
+    blob_uri: str | None
+    lineage_id: str
+    golden_profile: str
+    features_json: dict[str, Any]
+    metrics_json: dict[str, Any]
+    confidence: float
+    ingested_at: dt.datetime
+    idempotency_hit: bool = False
+    projection: StageScoreProjectionOut | None = None
 
 
 class PartnerEventIn(BaseModel):

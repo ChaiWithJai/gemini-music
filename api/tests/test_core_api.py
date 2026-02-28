@@ -202,6 +202,86 @@ def test_maha_mantra_stage_eval_endpoint(client: TestClient) -> None:
     assert len(body["feedback"]) >= 1
 
 
+def test_maha_mantra_timing_endpoint(client: TestClient) -> None:
+    resp = client.get("/v1/maha-mantra/timing")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["track_id"] == "maha_mantra_lZXeUhUc8PM_v1"
+    assert body["video_id"] == "lZXeUhUc8PM"
+    assert body["listen_stage"]["start_sec"] == 18
+    assert body["guided_stage"]["duration_sec"] == 45
+    assert body["call_response_stage"]["duration_sec"] == 48
+    assert len(body["call_response_stage"]["rounds"]) == 8
+    assert body["independent_stage"]["duration_sec"] == 30
+
+
+def test_audio_chunk_ingest_and_projection(client: TestClient) -> None:
+    user_resp = client.post("/v1/users", json={"display_name": "Chunk User"})
+    assert user_resp.status_code == 201
+    user_id = user_resp.json()["id"]
+
+    session_resp = client.post(
+        "/v1/sessions",
+        json={
+            "user_id": user_id,
+            "intention": "Chunk scoring flow",
+            "mantra_key": "maha_mantra_hare_krishna_hare_rama",
+            "mood": "focused",
+            "target_duration_minutes": 3,
+        },
+    )
+    assert session_resp.status_code == 201
+    session_id = session_resp.json()["id"]
+
+    payload = {
+        "stage": "guided",
+        "chunk_id": "guided-001",
+        "seq": 1,
+        "t_start_ms": 48000,
+        "t_end_ms": 93000,
+        "sample_rate_hz": 16000,
+        "encoding": "browser_metrics_v1",
+        "lineage": "vaishnavism",
+        "golden_profile": "maha_mantra_v1",
+        "features": {
+            "duration_seconds": 45,
+            "total_frames": 450,
+            "voiced_frames": 320,
+            "voice_ratio_total": 0.71,
+            "pitch_stability": 0.84,
+            "cadence_bpm": 72,
+            "cadence_consistency": 0.81,
+            "avg_energy": 0.5,
+            "snr_db": 18,
+        },
+    }
+
+    first = client.post(f"/v1/sessions/{session_id}/audio/chunks", json=payload)
+    assert first.status_code == 201
+    first_body = first.json()
+    assert first_body["idempotency_hit"] is False
+    assert first_body["stage"] == "guided"
+    assert first_body["projection"]["stage"] == "guided"
+    assert first_body["projection"]["source_chunk_count"] == 1
+    assert first_body["projection"]["coverage_ratio"] >= 0.95
+    assert first_body["projection"]["confidence"] > 0
+    assert first_body["projection"]["composite"] >= 0.7
+
+    second = client.post(f"/v1/sessions/{session_id}/audio/chunks", json=payload)
+    assert second.status_code == 201
+    second_body = second.json()
+    assert second_body["id"] == first_body["id"]
+    assert second_body["idempotency_hit"] is True
+    assert second_body["projection"]["source_chunk_count"] == 1
+
+    list_resp = client.get(f"/v1/sessions/{session_id}/stage-projections")
+    assert list_resp.status_code == 200
+    projections = list_resp.json()
+    assert len(projections) == 1
+    assert projections[0]["stage"] == "guided"
+    assert projections[0]["source_chunk_count"] == 1
+
+
 def test_poc_static_ui_served(client: TestClient) -> None:
     resp = client.get("/poc/")
     assert resp.status_code == 200

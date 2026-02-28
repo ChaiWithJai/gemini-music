@@ -15,18 +15,22 @@ from sqlalchemy.orm import Session as DBSession
 from .db import Base, engine, get_db
 from .models import (
     AdaptationDecision,
+    AudioChunk,
     BusinessSignalDaily,
     ConsentRecord,
     EcosystemUsageDaily,
     IntegrationExportLog,
     SessionEvent,
     SessionModel,
+    StageScoreProjection,
     User,
     WebhookSubscription,
 )
 from .schemas import (
     AdaptationOut,
     AdaptationRequest,
+    AudioChunkIn,
+    AudioChunkIngestOut,
     BhavEvaluateRequest,
     BhavEvaluationOut,
     BusinessSignalDailyOut,
@@ -36,6 +40,7 @@ from .schemas import (
     ExperimentCompareOut,
     ExperimentCompareRequest,
     HealthOut,
+    MahaTimingOut,
     MahaMantraEvalOut,
     MahaMantraEvalRequest,
     PartnerEventIn,
@@ -50,13 +55,16 @@ from .schemas import (
     UserOut,
     WebhookSubscriptionCreate,
     WebhookSubscriptionOut,
+    StageScoreProjectionOut,
 )
 from .services.adaptation import AdaptationContext, generate_adaptation
+from .services.audio_scoring import normalize_audio_chunk, recompute_stage_projection
 from .services.ai_kirtan_contract import quality_rubric_score, verify_payload_contract
 from .services.bhav import DEFAULT_GOLDEN_PROFILE, compute_bhav, resolve_lineage
 from .services.event_contracts import validate_event_payload
 from .services.experiments import compare_adaptive_vs_static
 from .services.gemini_adapter import try_gemini_adaptation
+from .services.maha_mantra_timing import load_maha_mantra_timing_markers
 from .services.maha_mantra_eval import evaluate_maha_mantra_stage
 from .services.projections import (
     apply_progress_projection,
@@ -649,6 +657,11 @@ def evaluate_bhav(
     )
 
 
+@app.get("/v1/maha-mantra/timing", response_model=MahaTimingOut)
+def get_maha_mantra_timing() -> MahaTimingOut:
+    return MahaTimingOut.model_validate(load_maha_mantra_timing_markers())
+
+
 @app.post("/v1/maha-mantra/evaluate", response_model=MahaMantraEvalOut)
 def evaluate_maha_mantra(payload: MahaMantraEvalRequest) -> MahaMantraEvalOut:
     if payload.golden_profile != DEFAULT_GOLDEN_PROFILE:
@@ -671,6 +684,186 @@ def evaluate_maha_mantra(payload: MahaMantraEvalRequest) -> MahaMantraEvalOut:
         lineage=lineage,
         golden_profile=payload.golden_profile,
     )
+
+
+@app.post(
+    "/v1/sessions/{session_id}/audio/chunks",
+    response_model=AudioChunkIngestOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def ingest_audio_chunk(
+    session_id: str,
+    payload: AudioChunkIn,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> AudioChunkIngestOut:
+    session = _must_get_session(db, session_id)
+    if session.status != "ACTIVE":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Session is not active")
+    if payload.golden_profile != DEFAULT_GOLDEN_PROFILE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported golden profile: {payload.golden_profile}",
+        )
+
+    try:
+        lineage = resolve_lineage(payload.lineage)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    existing = db.scalars(
+        select(AudioChunk).where(
+            AudioChunk.session_id == session_id,
+            AudioChunk.chunk_id == payload.chunk_id,
+        )
+    ).first()
+    if existing is not None:
+        projection = db.scalars(
+            select(StageScoreProjection).where(
+                StageScoreProjection.session_id == session_id,
+                StageScoreProjection.stage == existing.stage,
+                StageScoreProjection.lineage_id == existing.lineage_id,
+                StageScoreProjection.golden_profile == existing.golden_profile,
+            )
+        ).first()
+        if projection is None:
+            projection = recompute_stage_projection(
+                db,
+                session_id=session_id,
+                stage=existing.stage,
+                lineage_id=existing.lineage_id,
+                golden_profile=existing.golden_profile,
+            )
+            db.commit()
+            db.refresh(projection)
+
+        out = AudioChunkIngestOut.model_validate(existing)
+        out.idempotency_hit = True
+        out.projection = StageScoreProjectionOut.model_validate(projection)
+        return out
+
+    features_json, metrics_json, chunk_confidence = normalize_audio_chunk(
+        t_start_ms=payload.t_start_ms,
+        t_end_ms=payload.t_end_ms,
+        features=payload.features,
+    )
+    row = AudioChunk(
+        session_id=session_id,
+        stage=payload.stage,
+        round_index=payload.round_index,
+        chunk_id=payload.chunk_id,
+        seq=payload.seq,
+        t_start_ms=payload.t_start_ms,
+        t_end_ms=payload.t_end_ms,
+        sample_rate_hz=payload.sample_rate_hz,
+        encoding=payload.encoding,
+        blob_uri=payload.blob_uri,
+        lineage_id=lineage.id,
+        golden_profile=payload.golden_profile,
+        features_json=features_json,
+        metrics_json=metrics_json,
+        confidence=chunk_confidence,
+    )
+    db.add(row)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        existing_after_conflict = db.scalars(
+            select(AudioChunk).where(
+                AudioChunk.session_id == session_id,
+                AudioChunk.chunk_id == payload.chunk_id,
+            )
+        ).first()
+        if existing_after_conflict is None:
+            raise
+        projection = db.scalars(
+            select(StageScoreProjection).where(
+                StageScoreProjection.session_id == session_id,
+                StageScoreProjection.stage == existing_after_conflict.stage,
+                StageScoreProjection.lineage_id == existing_after_conflict.lineage_id,
+                StageScoreProjection.golden_profile == existing_after_conflict.golden_profile,
+            )
+        ).first()
+        if projection is None:
+            projection = recompute_stage_projection(
+                db,
+                session_id=session_id,
+                stage=existing_after_conflict.stage,
+                lineage_id=existing_after_conflict.lineage_id,
+                golden_profile=existing_after_conflict.golden_profile,
+            )
+            db.commit()
+            db.refresh(projection)
+
+        out = AudioChunkIngestOut.model_validate(existing_after_conflict)
+        out.idempotency_hit = True
+        out.projection = StageScoreProjectionOut.model_validate(projection)
+        return out
+
+    projection = recompute_stage_projection(
+        db,
+        session_id=session_id,
+        stage=payload.stage,
+        lineage_id=lineage.id,
+        golden_profile=payload.golden_profile,
+    )
+    db.add(
+        SessionEvent(
+            session_id=session_id,
+            event_type="audio_chunk_ingested",
+            client_event_id=f"audio_chunk:{payload.chunk_id}",
+            schema_version="v1",
+            payload={
+                "stage": payload.stage,
+                "chunk_id": payload.chunk_id,
+                "round_index": payload.round_index,
+                "metrics": metrics_json,
+                "projection": {
+                    "discipline": projection.discipline,
+                    "resonance": projection.resonance,
+                    "coherence": projection.coherence,
+                    "composite": projection.composite,
+                    "confidence": projection.confidence,
+                },
+            },
+        )
+    )
+    refresh_daily_projections(db, date_key=_date_key(row.ingested_at))
+    db.commit()
+
+    db.refresh(row)
+    db.refresh(projection)
+    out = AudioChunkIngestOut.model_validate(row)
+    out.idempotency_hit = False
+    out.projection = StageScoreProjectionOut.model_validate(projection)
+    return out
+
+
+@app.get(
+    "/v1/sessions/{session_id}/stage-projections",
+    response_model=list[StageScoreProjectionOut],
+)
+def list_stage_projections(
+    session_id: str,
+    db: Annotated[DBSession, Depends(get_db)],
+) -> list[StageScoreProjection]:
+    _must_get_session(db, session_id)
+    rows = db.scalars(
+        select(StageScoreProjection)
+        .where(StageScoreProjection.session_id == session_id)
+        .order_by(StageScoreProjection.updated_at.desc(), StageScoreProjection.id.desc())
+    ).all()
+
+    stage_rank = {
+        "guided": 0,
+        "call_response": 1,
+        "independent": 2,
+    }
+    rows.sort(key=lambda row: (stage_rank.get(row.stage, 99), row.id))
+    return rows
 
 
 @app.post("/v1/integrations/events", response_model=SessionEventOut, status_code=status.HTTP_201_CREATED)
