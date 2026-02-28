@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API_DIR="$ROOT_DIR/api"
 FULL_RUN=true
+RUN_PREFLIGHT=true
 
 usage() {
   cat <<USAGE
@@ -11,6 +12,7 @@ Usage: ./scripts/day0.sh [--quick]
 
 Options:
   --quick   Run bootstrap + install + tests only (skip full make ci)
+  --skip-preflight   Skip repo preflight diagnostics
 USAGE
 }
 
@@ -18,6 +20,9 @@ for arg in "$@"; do
   case "$arg" in
     --quick)
       FULL_RUN=false
+      ;;
+    --skip-preflight)
+      RUN_PREFLIGHT=false
       ;;
     -h|--help)
       usage
@@ -46,6 +51,10 @@ fi
 if [[ ! -d "$API_DIR" ]]; then
   echo "API directory not found at: $API_DIR"
   exit 1
+fi
+
+if [[ "$RUN_PREFLIGHT" == "true" ]]; then
+  "$ROOT_DIR/scripts/preflight.sh"
 fi
 
 echo "Using Python: $PYTHON_BIN"

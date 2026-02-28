@@ -15,6 +15,18 @@ REPORT_PATH = ROOT / "evals" / "reports" / "project_goal_status.json"
 SCORECARD_REPORT_PATH = ROOT / "evals" / "reports" / "latest_report.json"
 GEMINI_VERIFY_REPORT_PATH = ROOT / "evals" / "reports" / "gemini_skill_verification.json"
 EXPECTED_PYTHON_MM = (3, 13)
+GOAL_TEST_USUALLY_ATTEMPTS = max(1, int(os.getenv("GOAL_TEST_USUALLY_ATTEMPTS", "10")))
+
+
+def _scorecard_eval_command() -> list[str]:
+    return [
+        sys.executable,
+        "-m",
+        "evals.run_evals",
+        "--include-usually-passes",
+        "--usually-attempts",
+        str(GOAL_TEST_USUALLY_ATTEMPTS),
+    ]
 
 
 def _run_subprocess_once(cmd: list[str]) -> dict[str, Any]:
@@ -971,7 +983,7 @@ def _build_deep_agent_operating_model(
         {
             "tool_id": "run_scorecard_evals",
             "purpose": "Generate scorecard-aligned behavior evidence.",
-            "command": [sys.executable, "-m", "evals.run_evals", "--include-usually-passes", "--usually-attempts", "3"],
+            "command": _scorecard_eval_command(),
             "retry_policy": {"max_attempts": 2, "backoff_seconds_linear": 0.3},
         },
         {
@@ -1276,9 +1288,7 @@ def _goal_api_scenario() -> dict[str, Any]:
 
 def main() -> int:
     _verify_runtime()
-    scorecard_run = _run_subprocess_with_retry(
-        [sys.executable, "-m", "evals.run_evals", "--include-usually-passes", "--usually-attempts", "3"]
-    )
+    scorecard_run = _run_subprocess_with_retry(_scorecard_eval_command())
     gemini_verify_run = _run_subprocess_with_retry([sys.executable, "scripts/verify_gemini_skill_usage.py"])
 
     scorecard = _load_json(SCORECARD_REPORT_PATH)

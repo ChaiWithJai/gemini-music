@@ -5,6 +5,7 @@ import datetime as dt
 import json
 import math
 import os
+import random
 import traceback
 from pathlib import Path
 from statistics import mean
@@ -34,6 +35,12 @@ def parse_args() -> argparse.Namespace:
         default="evals/reports/latest_report.json",
         help="Path to output JSON report.",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=1337,
+        help="Deterministic seed for reproducible eval orchestration.",
+    )
     return parser.parse_args()
 
 
@@ -45,6 +52,7 @@ def _safe_mean(values: list[float]) -> float:
 
 def main() -> int:
     args = parse_args()
+    random.seed(args.seed)
 
     # Keep eval DB isolated from demo DB.
     os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/gemini_music_eval.db")
@@ -174,6 +182,7 @@ def main() -> int:
             "usually_attempts": args.usually_attempts,
             "database_url": os.environ.get("DATABASE_URL"),
             "manual_evidence_path": str(manual_path),
+            "seed": args.seed,
         },
         "summary": {
             "total_eval_cases": len(eval_cases),

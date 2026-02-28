@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gemini Music Demo Console</title>
+  <link rel="stylesheet" href="/demo/demo.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p class="kicker">Judge-ready route</p>
+      <h1>Gemini Music Demo Console</h1>
+      <p class="subtitle">
+        One screen to run adaptation, stage mastery, ecosystem reliability, and business signal checks.
+      </p>
+      <div class="hero-actions">
+        <a class="btn ghost" href="/poc/" target="_blank" rel="noreferrer">Open Product POC</a>
+        <button id="run-all" class="btn">Run Full Demo Sweep</button>
+      </div>
+    </header>
+
+    <section class="grid">
+      <article class="card">
+        <h2>System Health</h2>
+        <p>Verifies API health and loads north-star + attribution summaries.</p>
+        <button data-action="health" class="btn">Run Health + Business Signal</button>
+        <pre id="out-health" class="log"></pre>
+      </article>
+
+      <article class="card">
+        <h2>Adaptive Session Scenario</h2>
+        <p>Creates a user/session and proves listener + biometric + environment adaptation plus Bhav output.</p>
+        <button data-action="session" class="btn">Run Adaptation Flow</button>
+        <pre id="out-session" class="log"></pre>
+      </article>
+
+      <article class="card">
+        <h2>Mantra Stage Mastery</h2>
+        <p>Evaluates guided, call-response, and independent stages with progression deltas.</p>
+        <button data-action="mastery" class="btn">Run Stage Matrix</button>
+        <pre id="out-mastery" class="log"></pre>
+      </article>
+
+      <article class="card">
+        <h2>Ecosystem Reliability</h2>
+        <p>Exercises webhook queue processing and surfaces daily ecosystem counters.</p>
+        <button data-action="ecosystem" class="btn">Run Reliability Check</button>
+        <pre id="out-ecosystem" class="log"></pre>
+      </article>
+    </section>
+  </main>
+
+  <script src="/demo/demo.js"></script>
+</body>
+</html>

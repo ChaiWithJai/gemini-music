@@ -41,6 +41,12 @@ make recompute_projections
 make drift_snapshot
 make data_quality
 make weekly_kpi
+make bench_adaptive
+make load_benchmark
+make chaos_reliability
+make seed_repro
+make ai_kirtan_quality
+make adapter_verify
 make release_gate
 ```
 
@@ -155,6 +161,16 @@ Supported lineage values:
 - `shree_vallabhacharya`
 - `vaishnavism` (alias: `vashnavism`)
 
+### 10) Process queued/retrying webhooks (retry/backoff/dead-letter)
+```bash
+curl -s -X POST "http://localhost:8000/v1/admin/webhooks/process?batch_size=100&ignore_schedule=true"
+```
+
+### 11) North-star business metric (versioned contract)
+```bash
+curl -s http://localhost:8000/v1/analytics/business-signal/north-star
+```
+
 ## Test
 
 ```bash
@@ -180,7 +196,7 @@ cd /Users/jaybhagat/projects/gemini-music/api
 make evals
 ```
 
-Run all evals including `USUALLY_PASSES` with 3 attempts:
+Run all evals including `USUALLY_PASSES` with 10 attempts:
 
 ```bash
 cd /Users/jaybhagat/projects/gemini-music/api
@@ -216,6 +232,7 @@ Demo artifact: `demo/latest_demo_output.json`
 After running the API server, open:
 
 - `http://localhost:8000/poc/`
+- `http://localhost:8000/demo/`
 
 Flow implemented in UI:
 

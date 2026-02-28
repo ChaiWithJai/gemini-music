@@ -21,6 +21,7 @@ cd api
 make run
 # open http://localhost:8000/docs
 # open http://localhost:8000/poc/
+# open http://localhost:8000/demo/
 ```
 
 4. Make a contribution on a feature branch.
@@ -50,6 +51,12 @@ cd ..
 ./scripts/release.sh v0.2.0
 ```
 
+8. Rehearse executive demo + build submission dossier.
+```bash
+./scripts/rehearse_demo.sh
+./scripts/build_submission_dossier.sh
+```
+
 ## Developer Commands
 
 From `api/`:
@@ -60,6 +67,12 @@ From `api/`:
 - `make test`: run unit and API tests
 - `make evals_all`: run full scorecard eval set
 - `make goal_test`: run focused goal scenario and produce single JSON status report
+- `make bench_adaptive`: 30-run adaptive-vs-static benchmark with CI95
+- `make load_benchmark`: concurrent load/latency benchmark (p50/p95/p99 + error rate)
+- `make chaos_reliability`: reliability scenarios (no biometrics, noisy audio, transient fallback)
+- `make seed_repro`: deterministic seeded reproducibility check
+- `make ai_kirtan_quality`: payload contract + quality rubric artifact
+- `make adapter_verify`: wearable/content adapter starter-kit verification
 - `make ci`: full local quality gate chain
 - `make release_gate`: enforce score and drift thresholds
 
@@ -78,7 +91,7 @@ From `api/`:
 
 - Pin runtime to Python 3.13 for deterministic local and CI behavior.
 - Fail fast on environment drift (`make doctor`).
-- Keep release confidence evidence-first: tests, evals, goal scenario, drift snapshot, release gate.
+- Keep release confidence evidence-first: tests, evals, benchmarks, chaos checks, drift snapshot, release gate.
 - Treat artifacts in `api/evals/reports/` as release evidence.
 
 ## Release Policy
