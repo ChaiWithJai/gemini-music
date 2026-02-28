@@ -192,6 +192,10 @@ class EcosystemUsageOut(APIModel):
     date_key: str
     inbound_partner_events: int
     outbound_webhooks_queued: int
+    webhook_deliveries_succeeded: int
+    webhook_deliveries_retrying: int
+    webhook_dead_letters: int
+    webhook_failed_attempts: int
     exports_generated: int
     wearable_adapter_events: int
     content_export_events: int

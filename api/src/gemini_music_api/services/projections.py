@@ -6,6 +6,7 @@ from statistics import mean
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
@@ -36,8 +37,16 @@ def _upsert_ecosystem_row(db: Session, date_key: str) -> EcosystemUsageDaily:
     row = db.get(EcosystemUsageDaily, date_key)
     if row is None:
         row = EcosystemUsageDaily(date_key=date_key)
-        db.add(row)
-        db.flush()
+        savepoint = db.begin_nested()
+        try:
+            db.add(row)
+            db.flush()
+            savepoint.commit()
+        except IntegrityError:
+            savepoint.rollback()
+            row = db.get(EcosystemUsageDaily, date_key)
+            if row is None:
+                raise
     return row
 
 
@@ -45,8 +54,16 @@ def _upsert_business_row(db: Session, date_key: str) -> BusinessSignalDaily:
     row = db.get(BusinessSignalDaily, date_key)
     if row is None:
         row = BusinessSignalDaily(date_key=date_key)
-        db.add(row)
-        db.flush()
+        savepoint = db.begin_nested()
+        try:
+            db.add(row)
+            db.flush()
+            savepoint.commit()
+        except IntegrityError:
+            savepoint.rollback()
+            row = db.get(BusinessSignalDaily, date_key)
+            if row is None:
+                raise
     return row
 
 
@@ -82,7 +99,12 @@ def build_session_summary(
     practice_seconds = sum(float(e.payload.get("practice_seconds", 0.0)) for e in events)
     if practice_seconds <= 0:
         reference_end = session.ended_at or _utcnow()
-        practice_seconds = max(0.0, (reference_end - session.started_at).total_seconds())
+        started_at = session.started_at
+        if reference_end.tzinfo is not None:
+            reference_end = reference_end.astimezone(dt.timezone.utc).replace(tzinfo=None)
+        if started_at.tzinfo is not None:
+            started_at = started_at.astimezone(dt.timezone.utc).replace(tzinfo=None)
+        practice_seconds = max(0.0, (reference_end - started_at).total_seconds())
 
     practice_minutes = round(practice_seconds / 60.0, 2)
     target = max(1, session.target_duration_minutes)
@@ -155,6 +177,7 @@ def queue_webhook_deliveries(
     event_type: str,
     payload: dict[str, Any],
     event_time: dt.datetime | None = None,
+    max_attempts: int = 3,
 ) -> int:
     event_time = event_time or _utcnow()
     subscriptions = db.scalars(
@@ -173,6 +196,9 @@ def queue_webhook_deliveries(
                 event_type=event_type,
                 payload=payload,
                 status="queued",
+                attempt_count=0,
+                max_attempts=max(1, int(max_attempts)),
+                next_attempt_at=event_time,
             )
         )
         queued += 1
@@ -186,12 +212,85 @@ def queue_webhook_deliveries(
     return queued
 
 
+def process_webhook_deliveries(
+    db: Session,
+    *,
+    batch_size: int = 100,
+    now: dt.datetime | None = None,
+    ignore_schedule: bool = False,
+    base_backoff_seconds: int = 5,
+) -> dict[str, int]:
+    now = now or _utcnow()
+    query = (
+        select(WebhookDelivery)
+        .where(WebhookDelivery.status.in_(["queued", "retrying"]))
+        .order_by(WebhookDelivery.id.asc())
+        .limit(batch_size)
+    )
+    deliveries = db.scalars(query).all()
+
+    processed = 0
+    succeeded = 0
+    retried = 0
+    dead_lettered = 0
+    failed_attempts = 0
+    touched_dates: set[str] = set()
+
+    for delivery in deliveries:
+        if not ignore_schedule and delivery.next_attempt_at and delivery.next_attempt_at > now:
+            continue
+
+        processed += 1
+        touched_dates.add(_date_key(delivery.created_at))
+        subscription = db.get(WebhookSubscription, delivery.subscription_id) if delivery.subscription_id else None
+        target_url = (subscription.target_url if subscription is not None else "").lower()
+        force_fail = bool((delivery.payload or {}).get("force_webhook_fail"))
+        should_fail = force_fail or ("fail" in target_url)
+
+        if not should_fail:
+            delivery.status = "delivered"
+            delivery.delivered_at = now
+            delivery.last_error = None
+            succeeded += 1
+            continue
+
+        failed_attempts += 1
+        delivery.attempt_count += 1
+        delivery.last_error = "simulated_delivery_failure"
+        if delivery.attempt_count >= max(1, int(delivery.max_attempts)):
+            delivery.status = "dead_letter"
+            delivery.dead_lettered_at = now
+            delivery.dead_letter_reason = "max_attempts_exceeded"
+            dead_lettered += 1
+        else:
+            backoff = max(1, int(base_backoff_seconds)) * (2 ** (delivery.attempt_count - 1))
+            delivery.status = "retrying"
+            delivery.next_attempt_at = now + dt.timedelta(seconds=backoff)
+            retried += 1
+
+    for date_key in touched_dates:
+        refresh_ecosystem_usage_daily(db, date_key=date_key)
+
+    db.flush()
+    return {
+        "processed": processed,
+        "succeeded": succeeded,
+        "retried": retried,
+        "dead_lettered": dead_lettered,
+        "failed_attempts": failed_attempts,
+    }
+
+
 def increment_ecosystem_usage(
     db: Session,
     *,
     date_key: str,
     inbound_partner_events: int = 0,
     outbound_webhooks_queued: int = 0,
+    webhook_deliveries_succeeded: int = 0,
+    webhook_deliveries_retrying: int = 0,
+    webhook_dead_letters: int = 0,
+    webhook_failed_attempts: int = 0,
     exports_generated: int = 0,
     wearable_adapter_events: int = 0,
     content_export_events: int = 0,
@@ -200,6 +299,10 @@ def increment_ecosystem_usage(
     row = _upsert_ecosystem_row(db, date_key)
     row.inbound_partner_events += inbound_partner_events
     row.outbound_webhooks_queued += outbound_webhooks_queued
+    row.webhook_deliveries_succeeded += webhook_deliveries_succeeded
+    row.webhook_deliveries_retrying += webhook_deliveries_retrying
+    row.webhook_dead_letters += webhook_dead_letters
+    row.webhook_failed_attempts += webhook_failed_attempts
     row.exports_generated += exports_generated
     row.wearable_adapter_events += wearable_adapter_events
     row.content_export_events += content_export_events
@@ -231,7 +334,30 @@ def refresh_ecosystem_usage_daily(db: Session, *, date_key: str) -> EcosystemUsa
     row.outbound_webhooks_queued = db.scalar(
         select(func.count(WebhookDelivery.id)).where(
             func.date(WebhookDelivery.created_at) == date_key,
-            WebhookDelivery.status == "queued",
+            WebhookDelivery.status.in_(["queued", "retrying"]),
+        )
+    ) or 0
+    row.webhook_deliveries_succeeded = db.scalar(
+        select(func.count(WebhookDelivery.id)).where(
+            func.date(WebhookDelivery.created_at) == date_key,
+            WebhookDelivery.status == "delivered",
+        )
+    ) or 0
+    row.webhook_deliveries_retrying = db.scalar(
+        select(func.count(WebhookDelivery.id)).where(
+            func.date(WebhookDelivery.created_at) == date_key,
+            WebhookDelivery.status == "retrying",
+        )
+    ) or 0
+    row.webhook_dead_letters = db.scalar(
+        select(func.count(WebhookDelivery.id)).where(
+            func.date(WebhookDelivery.created_at) == date_key,
+            WebhookDelivery.status == "dead_letter",
+        )
+    ) or 0
+    row.webhook_failed_attempts = db.scalar(
+        select(func.coalesce(func.sum(WebhookDelivery.attempt_count), 0)).where(
+            func.date(WebhookDelivery.created_at) == date_key
         )
     ) or 0
 

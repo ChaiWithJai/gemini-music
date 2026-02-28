@@ -142,6 +142,13 @@ class WebhookDelivery(Base):
     event_type: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued", index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    next_attempt_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dead_lettered_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    dead_letter_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
 
@@ -161,6 +168,10 @@ class EcosystemUsageDaily(Base):
     date_key: Mapped[str] = mapped_column(String(10), primary_key=True)  # YYYY-MM-DD
     inbound_partner_events: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     outbound_webhooks_queued: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    webhook_deliveries_succeeded: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    webhook_deliveries_retrying: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    webhook_dead_letters: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    webhook_failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     exports_generated: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     wearable_adapter_events: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     content_export_events: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

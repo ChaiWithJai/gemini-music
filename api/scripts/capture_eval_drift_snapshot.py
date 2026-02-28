@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
+import os
 from pathlib import Path
 
 from gemini_music_api.db import SessionLocal
@@ -60,9 +61,25 @@ def main() -> int:
     ci95_low = round(max(0.0, pass_rate - (1.96 * se)), 4)
     ci95_high = round(min(1.0, pass_rate + (1.96 * se)), 4)
 
+    max_total_drop = float(os.getenv("DRIFT_MAX_TOTAL_SCORE_DROP", "-2.0"))
+    max_rigor_drop = float(os.getenv("DRIFT_MAX_RIGOR_SCORE_DROP", "-0.3"))
+    min_ci95_low = float(os.getenv("DRIFT_MIN_ATTEMPT_CI95_LOW", "0.75"))
+
     status = "PASS"
-    if total_delta < -2.0 or rigor_delta < -0.3:
+    if total_delta < max_total_drop or rigor_delta < max_rigor_drop or ci95_low < min_ci95_low:
         status = "FAIL"
+
+    alarm = {
+        "triggered": status != "PASS",
+        "max_total_score_drop": max_total_drop,
+        "max_rigor_score_drop": max_rigor_drop,
+        "min_attempt_ci95_low": min_ci95_low,
+        "recommended_action": (
+            "Run make evals_all + make seed_repro + make bench_adaptive and open stabilization RFC before release."
+            if status != "PASS"
+            else "No escalation required."
+        ),
+    }
 
     snapshot = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -85,6 +102,7 @@ def main() -> int:
             "ci95_low": ci95_low,
             "ci95_high": ci95_high,
         },
+        "alarm": alarm,
     }
 
     with SessionLocal() as db:
