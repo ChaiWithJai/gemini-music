@@ -32,6 +32,25 @@ Open docs: `http://localhost:8000/docs`
 - If `.venv` exists with the wrong Python minor version, `make bootstrap` auto-recreates it.
 - Use `make doctor` for a fail-fast environment check before demos or releases.
 
+## DevOps + DDIA Ops Commands
+
+```bash
+cd /Users/jaybhagat/projects/gemini-music/api
+make ci                 # full local CI-equivalent gate set
+make recompute_projections
+make drift_snapshot
+make data_quality
+make weekly_kpi
+make release_gate
+```
+
+Migration workflow:
+
+```bash
+cd /Users/jaybhagat/projects/gemini-music/api
+DATABASE_URL=sqlite:///./gemini_music.db PYTHONPATH=src .venv/bin/alembic upgrade head
+```
+
 ## Core API flow (curl)
 
 ### 1) Create user

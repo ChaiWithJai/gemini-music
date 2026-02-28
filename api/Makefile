@@ -4,7 +4,7 @@ VENV ?= .venv
 PYTHON_BIN := $(VENV)/bin/python
 PIP_BIN := $(PYTHON_BIN) -m pip
 
-.PHONY: doctor bootstrap venv install lock run test evals evals_all verify_gemini demo goal_test poc_test recompute_projections data_quality weekly_kpi release_gate ci
+.PHONY: doctor bootstrap venv install lock run test evals evals_all verify_gemini demo goal_test poc_test recompute_projections drift_snapshot data_quality weekly_kpi release_gate ci
 
 doctor:
 	@echo "== Python toolchain check =="
@@ -78,6 +78,9 @@ poc_test: install
 recompute_projections: install
 	PYTHONPATH=src:. $(PYTHON_BIN) scripts/recompute_projections.py
 
+drift_snapshot: install
+	PYTHONPATH=src:. $(PYTHON_BIN) scripts/capture_eval_drift_snapshot.py
+
 data_quality: install
 	PYTHONPATH=src:. $(PYTHON_BIN) scripts/data_quality_checks.py
 
@@ -87,4 +90,4 @@ weekly_kpi: install
 release_gate: install
 	PYTHONPATH=src:. $(PYTHON_BIN) scripts/check_release_gates.py
 
-ci: doctor test evals_all verify_gemini goal_test poc_test recompute_projections data_quality weekly_kpi release_gate
+ci: doctor test evals_all verify_gemini goal_test poc_test recompute_projections drift_snapshot data_quality weekly_kpi release_gate

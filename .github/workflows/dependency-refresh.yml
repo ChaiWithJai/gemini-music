@@ -1,0 +1,43 @@
+name: dependency-refresh
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 1 * *'
+
+jobs:
+  refresh-report:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install
+        run: |
+          make bootstrap
+          make install
+
+      - name: Lock dependencies
+        run: make lock
+
+      - name: Outdated dependency report
+        run: |
+          mkdir -p evals/reports
+          .venv/bin/python -m pip list --outdated --format=json > evals/reports/dependency_outdated.json
+
+      - name: Upload dependency artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-refresh
+          path: |
+            api/requirements.lock
+            api/evals/reports/dependency_outdated.json
