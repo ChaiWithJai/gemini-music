@@ -1,0 +1,54 @@
+{
+  "version": "1.0.0",
+  "created_on": "2026-02-28",
+  "goal": "Working data layer and API layer for core mantra/kirtan stories",
+  "ddia_design_choices": [
+    "Append-only event log for session events",
+    "Materialized projections for session summary and user progress",
+    "Idempotent event ingestion with client_event_id",
+    "Schema-first models with evolvable JSON payload fields"
+  ],
+  "core_stories": [
+    {
+      "id": "CS-01",
+      "name": "Start practice session",
+      "endpoint": "POST /v1/sessions"
+    },
+    {
+      "id": "CS-02",
+      "name": "Ingest real-time signals",
+      "endpoint": "POST /v1/sessions/{session_id}/events"
+    },
+    {
+      "id": "CS-03",
+      "name": "Compute adaptation decision",
+      "endpoint": "POST /v1/sessions/{session_id}/adaptations"
+    },
+    {
+      "id": "CS-04",
+      "name": "End session and project summary",
+      "endpoint": "POST /v1/sessions/{session_id}/end"
+    },
+    {
+      "id": "CS-05",
+      "name": "Read longitudinal progress",
+      "endpoint": "GET /v1/users/{user_id}/progress"
+    }
+  ],
+  "data_model": {
+    "tables": [
+      "users",
+      "consent_records",
+      "sessions",
+      "session_events",
+      "adaptation_decisions",
+      "practice_progress"
+    ],
+    "idempotency_constraint": "UNIQUE(session_id, client_event_id) on session_events"
+  },
+  "slo_targets": {
+    "feedback_latency_p95_ms": 300,
+    "session_service_uptime_percent": 99,
+    "event_write_duplicate_tolerance": "exactly-once effective via idempotent keys"
+  }
+}

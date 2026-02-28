@@ -1,0 +1,283 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+# Ensure the app reads a test database URL before importing package modules.
+TEST_DB_PATH = Path("/tmp/gemini_music_api_test.db")
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
+
+from gemini_music_api.db import Base, engine
+from gemini_music_api.main import app
+
+
+@pytest.fixture(autouse=True)
+def reset_db() -> None:
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture
+def client() -> TestClient:
+    with TestClient(app) as c:
+        yield c
+
+
+def test_health(client: TestClient) -> None:
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+
+
+def test_core_story_flow(client: TestClient) -> None:
+    user_resp = client.post("/v1/users", json={"display_name": "Jay"})
+    assert user_resp.status_code == 201
+    user_id = user_resp.json()["id"]
+
+    consent_resp = client.put(
+        f"/v1/users/{user_id}/consent",
+        json={
+            "biometric_enabled": True,
+            "environmental_enabled": True,
+            "raw_audio_storage_enabled": False,
+            "policy_version": "v1",
+        },
+    )
+    assert consent_resp.status_code == 200
+    assert consent_resp.json()["biometric_enabled"] is True
+
+    start_resp = client.post(
+        "/v1/sessions",
+        json={
+            "user_id": user_id,
+            "intention": "Evening grounding",
+            "mantra_key": "om_namah_shivaya",
+            "mood": "anxious",
+            "target_duration_minutes": 10,
+        },
+    )
+    assert start_resp.status_code == 201
+    session_id = start_resp.json()["id"]
+
+    event_payload = {
+        "event_type": "voice_window",
+        "client_event_id": "evt-001",
+        "payload": {
+            "cadence_bpm": 78,
+            "pronunciation_score": 0.61,
+            "flow_score": 0.52,
+            "practice_seconds": 420,
+            "heart_rate": 114,
+            "noise_level_db": 48,
+        },
+    }
+    first_event = client.post(f"/v1/sessions/{session_id}/events", json=event_payload)
+    assert first_event.status_code == 201
+    assert first_event.json()["idempotency_hit"] is False
+
+    second_event = client.post(f"/v1/sessions/{session_id}/events", json=event_payload)
+    assert second_event.status_code == 201
+    assert second_event.json()["id"] == first_event.json()["id"]
+    assert second_event.json()["idempotency_hit"] is True
+
+    adaptation_resp = client.post(
+        f"/v1/sessions/{session_id}/adaptations",
+        json={"explicit_mood": "anxious"},
+    )
+    assert adaptation_resp.status_code == 200
+    adaptation = adaptation_resp.json()
+    assert adaptation["guidance_intensity"] == "high"
+    assert adaptation["tempo_bpm"] <= 78
+
+    end_resp = client.post(
+        f"/v1/sessions/{session_id}/end",
+        json={"user_value_rating": 5, "completed_goal": True},
+    )
+    assert end_resp.status_code == 200
+    summary = end_resp.json()["summary"]
+    assert summary["completed_goal"] is True
+    assert summary["meaningful_session"] is False  # <10 min in this test fixture
+
+    progress_resp = client.get(f"/v1/users/{user_id}/progress")
+    assert progress_resp.status_code == 200
+    progress = progress_resp.json()
+    assert progress["total_sessions"] == 1
+    assert progress["completed_sessions"] == 1
+
+
+def test_bhav_eval_maha_mantra_golden(client: TestClient) -> None:
+    user_resp = client.post("/v1/users", json={"display_name": "Bhav User"})
+    assert user_resp.status_code == 201
+    user_id = user_resp.json()["id"]
+
+    start_resp = client.post(
+        "/v1/sessions",
+        json={
+            "user_id": user_id,
+            "intention": "Maha Mantra devotional practice",
+            "mantra_key": "maha_mantra_hare_krishna_hare_rama",
+            "mood": "grounded",
+            "target_duration_minutes": 10,
+        },
+    )
+    assert start_resp.status_code == 201
+    session_id = start_resp.json()["id"]
+
+    # Stable cadence and strong quality signals to simulate a good devotional session.
+    for i, cadence in enumerate([72, 73, 72, 74]):
+        evt = client.post(
+            f"/v1/sessions/{session_id}/events",
+            json={
+                "event_type": "voice_window",
+                "client_event_id": f"bhav-evt-{i}",
+                "payload": {
+                    "cadence_bpm": cadence,
+                    "pronunciation_score": 0.9,
+                    "flow_score": 0.88,
+                    "practice_seconds": 180,
+                    "adaptation_helpful": True,
+                },
+            },
+        )
+        assert evt.status_code == 201
+
+    end_resp = client.post(
+        f"/v1/sessions/{session_id}/end",
+        json={"user_value_rating": 5, "completed_goal": True},
+    )
+    assert end_resp.status_code == 200
+
+    lineages = ["sadhguru", "shree_vallabhacharya", "vashnavism"]
+    for lineage in lineages:
+        bhav_resp = client.post(
+            f"/v1/sessions/{session_id}/bhav",
+            json={"golden_profile": "maha_mantra_v1", "lineage": lineage, "persist": True},
+        )
+        assert bhav_resp.status_code == 200
+        bhav = bhav_resp.json()
+
+        assert bhav["profile_name"] == "maha_mantra_v1"
+        assert bhav["lineage_id"] in {"sadhguru", "shree_vallabhacharya", "vaishnavism"}
+        assert bhav["discipline"] >= 0.73
+        assert bhav["resonance"] >= 0.70
+        assert bhav["coherence"] >= 0.70
+        assert bhav["composite"] >= 0.75
+        assert bhav["passes_golden"] is True
+
+
+def test_maha_mantra_stage_eval_endpoint(client: TestClient) -> None:
+    payload = {
+        "stage": "call_response",
+        "lineage": "vashnavism",
+        "golden_profile": "maha_mantra_v1",
+        "metrics": {
+            "duration_seconds": 40,
+            "voice_ratio_total": 0.58,
+            "voice_ratio_student": 0.74,
+            "voice_ratio_guru": 0.16,
+            "pitch_stability": 0.86,
+            "cadence_bpm": 72,
+            "cadence_consistency": 0.83,
+            "avg_energy": 0.5,
+        },
+    }
+    resp = client.post("/v1/maha-mantra/evaluate", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["stage"] == "call_response"
+    assert body["lineage_id"] == "vaishnavism"
+    assert body["golden_profile"] == "maha_mantra_v1"
+    assert body["composite"] >= 0.75
+    assert body["passes_golden"] is True
+    assert body["metrics_used"]["voice_ratio_student"] >= 0.7
+    assert len(body["feedback"]) >= 1
+
+
+def test_poc_static_ui_served(client: TestClient) -> None:
+    resp = client.get("/poc/")
+    assert resp.status_code == 200
+    assert "Maha Mantra Learning Studio" in resp.text
+    assert "/poc/app.js" in resp.text
+
+
+def test_integration_surfaces_and_exports(client: TestClient) -> None:
+    user_resp = client.post("/v1/users", json={"display_name": "Integration User"})
+    assert user_resp.status_code == 201
+    user_id = user_resp.json()["id"]
+
+    session_resp = client.post(
+        "/v1/sessions",
+        json={
+            "user_id": user_id,
+            "intention": "Integration flow",
+            "mantra_key": "om_namah_shivaya",
+            "mood": "neutral",
+            "target_duration_minutes": 10,
+        },
+    )
+    assert session_resp.status_code == 201
+    session_id = session_resp.json()["id"]
+
+    webhook_resp = client.post(
+        "/v1/integrations/webhooks",
+        json={
+            "target_url": "https://example.org/hook",
+            "adapter_id": "content_playlist_export",
+            "event_types": ["session_ended", "bhav_evaluated"],
+            "is_active": True,
+        },
+    )
+    assert webhook_resp.status_code == 201
+
+    partner_event = client.post(
+        "/v1/integrations/events",
+        json={
+            "session_id": session_id,
+            "partner_source": "wearable_co",
+            "adapter_id": "wearable_hr_stream",
+            "event_type": "partner_signal",
+            "client_event_id": "integration-evt-001",
+            "payload": {
+                "signal_type": "heart_rate",
+                "heart_rate": 110,
+                "cadence_bpm": 74,
+                "practice_seconds": 180,
+            },
+        },
+    )
+    assert partner_event.status_code == 201
+    assert partner_event.json()["ingestion_source"] == "partner:wearable_co"
+
+    end_resp = client.post(
+        f"/v1/sessions/{session_id}/end",
+        json={"user_value_rating": 5, "completed_goal": True},
+    )
+    assert end_resp.status_code == 200
+
+    export_business = client.get("/v1/integrations/exports/business-signals/daily")
+    assert export_business.status_code == 200
+
+    export_ecosystem = client.get("/v1/integrations/exports/ecosystem-usage/daily")
+    assert export_ecosystem.status_code == 200
+    eco = export_ecosystem.json()
+    assert eco["inbound_partner_events"] >= 1
+    assert eco["exports_generated"] >= 1
+
+
+def test_adaptive_vs_static_experiment_endpoint(client: TestClient) -> None:
+    resp = client.post(
+        "/v1/analytics/experiments/adaptive-vs-static",
+        json={
+            "adaptive_values": [0.84, 0.8, 0.83, 0.82],
+            "static_values": [0.7, 0.71, 0.69, 0.7],
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["adaptive_mean"] > body["static_mean"]
+    assert body["ci95_high"] >= body["ci95_low"]

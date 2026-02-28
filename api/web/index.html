@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maha Mantra Learning Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/poc/styles.css" />
+</head>
+<body>
+  <main class="layout">
+    <header class="hero panel">
+      <p class="kicker">Gemini Maha Mantra POC</p>
+      <h1>Maha Mantra Learning Studio</h1>
+      <p class="subtitle">
+        Practice flow: 30s listen, guided follow-along, call-response with student turns, recap, and independent singing.
+      </p>
+    </header>
+
+    <section class="panel controls">
+      <h2>Session Setup</h2>
+      <div class="form-grid">
+        <label>
+          Display name
+          <input id="displayName" type="text" value="Hackathon Singer" maxlength="120" />
+        </label>
+        <label>
+          Lineage
+          <select id="lineageSelect">
+            <option value="vaishnavism">Vaishnavism</option>
+            <option value="sadhguru">Sadhguru</option>
+            <option value="shree_vallabhacharya">Shree Vallabhacharya</option>
+          </select>
+        </label>
+        <button id="initSessionBtn" class="btn primary">Initialize Session</button>
+      </div>
+      <p id="sessionMeta" class="meta">Session not initialized.</p>
+      <p class="meta">
+        Source track: <a href="https://youtu.be/lZXeUhUc8PM?si=3VsDT1WX6AmZJA2b" target="_blank" rel="noreferrer">Maha Mantra Kirtan on YouTube</a>
+      </p>
+    </section>
+
+    <section class="panel video-panel">
+      <h2>Practice Player</h2>
+      <div id="player" class="player"></div>
+      <div class="status-bar">
+        <p><span class="label">Stage:</span> <span id="currentStageLabel">Idle</span></p>
+        <p><span class="label">Turn:</span> <span id="turnLabel">-</span></p>
+        <p><span class="label">Countdown:</span> <span id="countdownLabel">-</span></p>
+      </div>
+      <p id="micStatus" class="meta">Mic status: idle</p>
+    </section>
+
+    <section class="panel flow">
+      <h2>Practice Flow</h2>
+      <div class="stage-grid">
+        <article class="stage" id="stage-listen">
+          <h3>1. Listen (30s)</h3>
+          <p>Absorb pronunciation, cadence, and phrasing before singing.</p>
+          <button id="listenBtn" class="btn primary" disabled>Start Listen</button>
+        </article>
+
+        <article class="stage" id="stage-guided">
+          <h3>2. Guided Follow-Along</h3>
+          <p>Sing with the track. We score discipline, resonance, and coherence.</p>
+          <button id="guidedBtn" class="btn" disabled>Start Guided Stage</button>
+        </article>
+
+        <article class="stage" id="stage-call">
+          <h3>3. Call-Response</h3>
+          <p>Guru turn plays audio. Student turn mutes audio and scores your response.</p>
+          <button id="callResponseBtn" class="btn" disabled>Start Call-Response</button>
+        </article>
+
+        <article class="stage" id="stage-recap">
+          <h3>4. Performance Recap</h3>
+          <p>See stage-level scoring and feedback before solo chanting.</p>
+          <button id="recapBtn" class="btn" disabled>Show Recap</button>
+        </article>
+
+        <article class="stage" id="stage-independent">
+          <h3>5. Independent Performance</h3>
+          <p>Sing on your own and get final scoring + Bhav check.</p>
+          <button id="independentBtn" class="btn" disabled>Start Independent Stage</button>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel results">
+      <h2>Scoring Output</h2>
+      <div id="resultsContainer" class="results-grid"></div>
+      <pre id="finalJson" class="json-view">No evaluation yet.</pre>
+    </section>
+  </main>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="/poc/app.js"></script>
+</body>
+</html>

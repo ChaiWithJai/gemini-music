@@ -1,0 +1,9 @@
+{
+  "frontier_novelty_manual": 0.6,
+  "user_value_proof_manual": 0.2,
+  "scale_readiness_manual": 0.3,
+  "ecosystem_leverage_manual": 0.2,
+  "safety_manual": 0.5,
+  "business_signal_manual": 0.2,
+  "eval_rigor_manual": 0.5
+}

@@ -1,0 +1,20 @@
+{
+  "source": "https://github.com/google-gemini/gemini-skills",
+  "skill": "gemini-api-dev",
+  "recommended_models_prefix": "gemini-3-",
+  "required_code_patterns_any": [
+    "from google import genai",
+    "@google/genai",
+    "google.golang.org/genai",
+    "com.google.genai"
+  ],
+  "forbidden_sdk_patterns": [
+    "google-generativeai",
+    "@google/generative-ai"
+  ],
+  "forbidden_model_patterns": [
+    "gemini-2.5-",
+    "gemini-2.0-",
+    "gemini-1.5-"
+  ]
+}
