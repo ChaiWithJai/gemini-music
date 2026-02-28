@@ -4,14 +4,22 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from gemini_music_api.db import SessionLocal
+from gemini_music_api.db import Base, SessionLocal, engine
+import gemini_music_api.models  # noqa: F401
 from gemini_music_api.services.projections import recompute_all_daily_projections
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORT_PATH = ROOT / "evals" / "reports" / "projection_backfill.json"
 
 
+def _ensure_schema() -> None:
+    # CI can run this script in a fresh workspace with an empty SQLite file.
+    Base.metadata.create_all(bind=engine)
+
+
 def main() -> int:
+    _ensure_schema()
+
     with SessionLocal() as db:
         result = recompute_all_daily_projections(db)
         db.commit()
