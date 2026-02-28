@@ -1,5 +1,6 @@
 PYTHON_VERSION ?= 3.13
-PYTHON ?= /opt/homebrew/bin/python3.13
+PYTHON_CANDIDATE := $(shell command -v python3.13 2>/dev/null || command -v python3 2>/dev/null || command -v python 2>/dev/null)
+PYTHON ?= $(PYTHON_CANDIDATE)
 VENV ?= .venv
 PYTHON_BIN := $(VENV)/bin/python
 PIP_BIN := $(PYTHON_BIN) -m pip
@@ -8,7 +9,14 @@ PIP_BIN := $(PYTHON_BIN) -m pip
 
 doctor:
 	@echo "== Python toolchain check =="
-	@command -v "$(PYTHON)" >/dev/null 2>&1 || (echo "Missing $(PYTHON). Install Python $(PYTHON_VERSION)." && exit 1)
+	@if [ -z "$(PYTHON)" ]; then \
+		echo "No Python interpreter found on PATH. Install Python $(PYTHON_VERSION) and/or set PYTHON=/path/to/python."; \
+		exit 1; \
+	fi
+	@if ! command -v "$(PYTHON)" >/dev/null 2>&1; then \
+		echo "Missing $(PYTHON). Install Python $(PYTHON_VERSION)."; \
+		exit 1; \
+	fi
 	@actual="$$( $(PYTHON) -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' )"; \
 	if [ "$$actual" != "$(PYTHON_VERSION)" ]; then \
 		echo "$(PYTHON) is $$actual; expected $(PYTHON_VERSION)."; \
@@ -34,7 +42,14 @@ bootstrap:
 		fi; \
 	fi
 	@if [ ! -x "$(PYTHON_BIN)" ]; then \
-		command -v "$(PYTHON)" >/dev/null 2>&1 || (echo "Missing $(PYTHON). Install Python $(PYTHON_VERSION)." && exit 1); \
+		if [ -z "$(PYTHON)" ]; then \
+			echo "No Python interpreter found on PATH. Install Python $(PYTHON_VERSION) and/or set PYTHON=/path/to/python."; \
+			exit 1; \
+		fi; \
+		if ! command -v "$(PYTHON)" >/dev/null 2>&1; then \
+			echo "Missing $(PYTHON). Install Python $(PYTHON_VERSION)."; \
+			exit 1; \
+		fi; \
 		actual="$$( $(PYTHON) -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' )"; \
 		if [ "$$actual" != "$(PYTHON_VERSION)" ]; then \
 			echo "$(PYTHON) is $$actual; expected $(PYTHON_VERSION)."; \
