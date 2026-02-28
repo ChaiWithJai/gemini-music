@@ -1,0 +1,6 @@
+.venv/
+# Legacy local env path kept ignored to avoid local noise during migration.
+.venv313/
+.pytest_cache/
+*.db
+__pycache__/
