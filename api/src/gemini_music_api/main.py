@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Connection, select
 from sqlalchemy.exc import IntegrityError
@@ -77,6 +78,10 @@ app = FastAPI(
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 if WEB_DIR.exists():
     app.mount("/poc", StaticFiles(directory=str(WEB_DIR), html=True), name="poc")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon() -> RedirectResponse:
+        return RedirectResponse(url="/poc/favicon.svg")
 
 
 def _sqlite_table_exists(conn: Connection, table_name: str) -> bool:

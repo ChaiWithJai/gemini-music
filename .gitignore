@@ -4,6 +4,8 @@
 
 # Local screenshot artifacts (repo root only)
 /*.png
+output/
+.playwright-cli/
 
 # Python
 __pycache__/

@@ -429,6 +429,36 @@ button {
   box-shadow: 0 16px 48px rgba(0,0,0,0.5);
 }
 
+.player.fallback-active {
+  border: 1px solid rgba(232,168,56,0.35);
+  box-shadow: 0 0 0 1px rgba(232,168,56,0.15), 0 16px 48px rgba(0,0,0,0.5);
+}
+
+.media-recovery {
+  margin-top: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(26,23,20,0.82);
+  display: grid;
+  gap: var(--s-3);
+}
+
+.media-status {
+  margin-top: 0;
+}
+
+.media-actions {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.media-btn {
+  font-size: var(--text-sm);
+  padding: var(--s-2) var(--s-4);
+}
+
 .status-bar {
   margin-top: var(--s-4);
   display: flex;
@@ -498,36 +528,58 @@ button {
   50% { box-shadow: 0 0 12px 4px rgba(232,168,56,0.25); }
 }
 
-/* ===== Practice Flow — Horizontal Scroll Strip ===== */
+/* ===== Practice Flow ===== */
+
+.interaction-queue {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(26,23,20,0.82);
+  padding: var(--s-4);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.queue-lane {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--s-3);
+  background: rgba(13,11,8,0.45);
+}
+
+.queue-lane.now {
+  border-color: rgba(232,168,56,0.45);
+  box-shadow: inset 0 0 0 1px rgba(232,168,56,0.16);
+}
+
+.queue-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  margin-bottom: var(--s-2);
+}
+
+.queue-copy {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.queue-primary {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
 
 .stage-strip {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
   gap: var(--s-4);
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  padding-bottom: var(--s-2);
-  -webkit-overflow-scrolling: touch;
-}
-
-.stage-strip::-webkit-scrollbar {
-  height: 4px;
-}
-
-.stage-strip::-webkit-scrollbar-track {
-  background: var(--bg-elevated);
-  border-radius: 2px;
-}
-
-.stage-strip::-webkit-scrollbar-thumb {
-  background: var(--text-secondary);
-  border-radius: 2px;
 }
 
 .stage {
-  flex: 0 0 auto;
-  min-width: var(--stage-min-w);
-  max-width: 18.75rem;
-  scroll-snap-align: start;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--s-6) var(--s-5);
@@ -582,6 +634,10 @@ button {
   content: " \2713";
   font-size: 0.7em;
   color: var(--pass);
+}
+
+.stage-btn {
+  margin-top: auto;
 }
 
 /* ===== Scoring Output ===== */
@@ -832,6 +888,10 @@ button {
 
   .status-bar {
     flex-direction: column;
+  }
+
+  .interaction-queue {
+    grid-template-columns: 1fr;
   }
 
   .result-header {
