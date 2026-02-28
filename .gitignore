@@ -1,5 +1,9 @@
 # macOS
 .DS_Store
+.playwright-mcp/
+
+# Local screenshot artifacts (repo root only)
+/*.png
 
 # Python
 __pycache__/
