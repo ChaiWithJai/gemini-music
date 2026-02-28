@@ -1,0 +1,10 @@
+{
+  "name": "Maha Mantra Learning Studio",
+  "short_name": "Mantra Studio",
+  "icons": [
+    { "src": "/poc/favicon.svg", "type": "image/svg+xml", "sizes": "any" }
+  ],
+  "theme_color": "#0d0b08",
+  "background_color": "#0d0b08",
+  "display": "standalone"
+}
