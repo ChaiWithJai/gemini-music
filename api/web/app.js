@@ -660,6 +660,21 @@ function renderResults() {
     header.appendChild(title);
     header.appendChild(badge);
 
+    const scorerMeta = document.createElement("p");
+    scorerMeta.className = "scorer-meta";
+    const scorerLabel = result.scorer_source === "gemini" ? "Gemini" : "Deterministic fallback";
+    const scorerModel = result.scorer_model ? ` (${result.scorer_model})` : "";
+    const scorerConfidence = Number(result.scorer_confidence || 0).toFixed(3);
+    const signalConfidence = Number(result.score_confidence || 0).toFixed(3);
+    const fallbackReason = (
+      result.scorer_evidence_json
+      && result.scorer_evidence_json.fallback_reason
+      && result.scorer_source !== "gemini"
+    )
+      ? ` | fallback: ${result.scorer_evidence_json.fallback_reason}`
+      : "";
+    scorerMeta.textContent = `Scorer: ${scorerLabel}${scorerModel} | scorer conf ${scorerConfidence} | signal conf ${signalConfidence}${fallbackReason}`;
+
     const bars = document.createElement("div");
     bars.className = "score-bars";
 
@@ -719,6 +734,7 @@ function renderResults() {
     }
 
     card.appendChild(header);
+    card.appendChild(scorerMeta);
     card.appendChild(bars);
     card.appendChild(composite);
     card.appendChild(feedbackList);
@@ -1091,6 +1107,11 @@ async function evaluateStage(stage, metrics, stageWindow = null) {
     coherence: projection.coherence,
     composite: projection.composite,
     passes_golden: projection.passes_golden,
+    score_confidence: projection.confidence,
+    scorer_source: projection.scorer_source || "deterministic",
+    scorer_model: projection.scorer_model || null,
+    scorer_confidence: projection.scorer_confidence || 0,
+    scorer_evidence_json: projection.scorer_evidence_json || {},
     feedback: projection.feedback_json || [],
     metrics_used: projection.metrics_json || {},
   };

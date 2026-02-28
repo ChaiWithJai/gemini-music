@@ -8,8 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import AudioChunk, StageScoreProjection
-from ..schemas import AudioChunkFeaturesIn, MahaMantraMetrics
+from ..schemas import AudioChunkFeaturesIn, MahaMantraEvalOut, MahaMantraMetrics
 from .bhav import DEFAULT_GOLDEN_PROFILE, resolve_lineage
+from .gemini_scoring import try_gemini_stage_score
 from .maha_mantra_eval import STAGE_TARGETS, evaluate_maha_mantra_stage
 
 
@@ -183,12 +184,53 @@ def recompute_stage_projection(
 
     metrics, aggregate_info = _aggregate_stage_metrics(chunks)
     lineage = resolve_lineage(lineage_id)
-    result = evaluate_maha_mantra_stage(
+    deterministic_result = evaluate_maha_mantra_stage(
         stage=stage,
         metrics=metrics,
         lineage=lineage,
         golden_profile=golden_profile,
     )
+    result: MahaMantraEvalOut = deterministic_result
+    gemini_payload, gemini_meta = try_gemini_stage_score(
+        stage=stage,
+        lineage=lineage,
+        golden_profile=golden_profile,
+        metrics=metrics,
+        deterministic_eval=deterministic_result,
+        aggregate_info=aggregate_info,
+    )
+
+    scorer_source = "deterministic"
+    scorer_model: str | None = None
+    scorer_confidence = 0.0
+    scorer_evidence_json: dict[str, Any] = {
+        "fallback_reason": gemini_meta.get("reason", "disabled"),
+        "gemini_attempted": bool(gemini_meta.get("attempted", False)),
+    }
+    if gemini_meta.get("attempted"):
+        scorer_model = gemini_meta.get("model")
+        scorer_evidence_json["model"] = gemini_meta.get("model")
+
+    if gemini_payload is not None:
+        scorer_source = "gemini"
+        scorer_model = str(gemini_meta.get("model")) if gemini_meta.get("model") else None
+        scorer_confidence = float(gemini_payload["scorer_confidence"])
+        scorer_evidence_json = {
+            **dict(gemini_payload.get("evidence_json") or {}),
+            "gemini_meta": gemini_meta,
+        }
+        result = MahaMantraEvalOut(
+            stage=stage,
+            lineage_id=lineage.id,
+            golden_profile=golden_profile,
+            discipline=float(gemini_payload["discipline"]),
+            resonance=float(gemini_payload["resonance"]),
+            coherence=float(gemini_payload["coherence"]),
+            composite=float(gemini_payload["composite"]),
+            passes_golden=bool(gemini_payload["passes_golden"]),
+            feedback=list(gemini_payload["feedback"]),
+            metrics_used=dict(gemini_payload.get("metrics_used") or deterministic_result.metrics_used),
+        )
 
     target_duration = float(STAGE_TARGETS[stage]["duration_seconds"])
     coverage_ratio = clamp01(float(metrics.duration_seconds) / max(1.0, target_duration))
@@ -226,14 +268,23 @@ def recompute_stage_projection(
     projection.composite = float(result.composite)
     projection.passes_golden = bool(result.passes_golden)
     projection.confidence = confidence
+    projection.scorer_source = scorer_source
+    projection.scorer_model = scorer_model
+    projection.scorer_confidence = round(clamp01(scorer_confidence), 3)
+    projection.scorer_evidence_json = scorer_evidence_json
     projection.coverage_ratio = round(coverage_ratio, 3)
     projection.source_chunk_count = int(aggregate_info["chunk_count"])
     projection.metrics_json = {
         **result.metrics_used,
         "aggregate": aggregate_info,
+        "scorer": {
+            "source": scorer_source,
+            "model": scorer_model,
+            "reason": gemini_meta.get("reason"),
+            "scorer_confidence": round(clamp01(scorer_confidence), 3),
+        },
     }
     projection.feedback_json = list(result.feedback)
     projection.updated_at = _utcnow()
     db.flush()
     return projection
-

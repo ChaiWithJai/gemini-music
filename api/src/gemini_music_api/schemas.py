@@ -241,6 +241,10 @@ class StageScoreProjectionOut(APIModel):
     composite: float
     passes_golden: bool
     confidence: float
+    scorer_source: str
+    scorer_model: str | None
+    scorer_confidence: float
+    scorer_evidence_json: dict[str, Any]
     coverage_ratio: float
     source_chunk_count: int
     metrics_json: dict[str, Any]
