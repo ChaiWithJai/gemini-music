@@ -1,0 +1,625 @@
+{
+  "meta": {
+    "document_id": "gemini_music_product_spec_book_aligned_v1",
+    "version": "1.0.0",
+    "status": "draft",
+    "created_on": "2026-02-28",
+    "project_name": "Gemini 3.0 Real-Time Personalized Mantra + AI-Assisted Kirtan",
+    "owner": "Jay Bhagat",
+    "context": "Hackathon build with 6-hour delivery constraint"
+  },
+  "book_alignment": {
+    "source_book": {
+      "title": "Building AI-Powered Products",
+      "author": "Dr. Marily Nika",
+      "edition": "First Edition",
+      "publication_date": "2025-02",
+      "chapters_applied": [
+        "Chapter 2: AI Product Development Lifecycle (AIPDL)",
+        "Chapter 3: Trade-offs, build-vs-buy, strategy",
+        "Chapter 6: Metric blend and OKR framework"
+      ]
+    },
+    "core_principles": [
+      "AI is not the product; the experience is the product.",
+      "Use iterative lifecycle: ideation, opportunity, concept/prototype, testing/analysis, rollout.",
+      "Validate product-market fit through business viability, technical feasibility, and user desirability.",
+      "Differentiate prototype from MVP; MVP must add value from day one.",
+      "Balance product health, system health, and AI proxy metrics.",
+      "Explicitly document trade-offs and guardrails."
+    ]
+  },
+  "product_definition": {
+    "product_type": "0-to-1",
+    "vision": "An adaptive spiritual music companion that helps users learn mantras, sustain devotional flow, and practice kirtan with real-time AI accompaniment.",
+    "problem_statement": "Learners lack real-time guidance for pronunciation, rhythm, and progression, while existing mantra experiences are static and not context-aware.",
+    "target_users": [
+      {
+        "segment": "Solo mantra learners",
+        "description": "Individuals practicing at home who need corrective feedback and consistency support"
+      },
+      {
+        "segment": "Kirtan practitioners/facilitators",
+        "description": "Users who need dynamic accompaniment and flow-preserving assistance"
+      }
+    ],
+    "jobs_to_be_done": [
+      "Help me chant correctly without breaking focus.",
+      "Adapt to my energy and context in real time.",
+      "Support me as an AI accompanist during solo kirtan.",
+      "Show progress and next best practice after each session."
+    ],
+    "in_scope_mvp": [
+      "Single-user mantra learning loop with live corrective cues",
+      "AI-assisted accompaniment with adaptive tempo/key",
+      "Personalization from explicit input plus optional biometrics",
+      "Session summary with improvement and next-step guidance"
+    ],
+    "out_of_scope_mvp": [
+      "Large group synchronization",
+      "Medical or therapeutic claims",
+      "Full music streaming platform replacement",
+      "Complex creator marketplace workflows"
+    ]
+  },
+  "hackathon_focus": {
+    "timebox_hours": 6,
+    "consolidated_drivers": [
+      {
+        "driver": "Real-time magic loop",
+        "definition": "Chant input drives immediate AI feedback and accompaniment adaptation"
+      },
+      {
+        "driver": "Measured value over baseline",
+        "definition": "Adaptive mode demonstrates quantifiable improvement versus static mode"
+      },
+      {
+        "driver": "Trust and launch realism",
+        "definition": "Consent, adaptation explainability, and minimal data policy are visible in demo"
+      }
+    ],
+    "build_plan": [
+      {
+        "block": "Core real-time loop",
+        "duration_hours": 3.0
+      },
+      {
+        "block": "Baseline comparison and quick eval capture",
+        "duration_hours": 1.5
+      },
+      {
+        "block": "Trust controls and explanation layer",
+        "duration_hours": 1.0
+      },
+      {
+        "block": "Demo polish and runbook",
+        "duration_hours": 0.5
+      }
+    ]
+  },
+  "aipdl": {
+    "ideation": {
+      "goals": [
+        "Define user pain points and target segment",
+        "Identify AI superpowers that unlock unique experience",
+        "Generate and prioritize feature hypotheses"
+      ],
+      "activities": [
+        "Cross-functional brainstorming",
+        "Problem-first framing to avoid shiny-object trap",
+        "Initial PRD framing"
+      ],
+      "outputs": [
+        "Prioritized feature candidates",
+        "Assumptions list",
+        "User segment and core use-case definition"
+      ]
+    },
+    "opportunity": {
+      "goals": [
+        "Assess product-market fit signals and go-to-market potential"
+      ],
+      "product_market_fit_pillars": {
+        "business_viability": {
+          "criteria": [
+            "Path to sustainable monetization",
+            "Acceptable unit economics",
+            "Regulatory and legal feasibility"
+          ]
+        },
+        "technical_feasibility": {
+          "criteria": [
+            "Model + infrastructure capability for real-time loop",
+            "Data and integration readiness",
+            "Operational reliability potential"
+          ]
+        },
+        "user_desirability": {
+          "criteria": [
+            "Clear pain-point relief",
+            "Repeat-use behavior",
+            "High user-perceived value"
+          ]
+        }
+      },
+      "outputs": [
+        "Go/no-go hypothesis thresholds",
+        "Experiment plan for PMF evidence"
+      ]
+    },
+    "concept_prototype": {
+      "prototype_definition": "Feasibility demonstration that may use mock or partially hardcoded components.",
+      "mvp_definition": "Functional product that delivers user value from day one using live interactions.",
+      "mvp_requirements_from_book": [
+        "Add immediate value",
+        "Show integration compatibility",
+        "Demonstrate domain-specific expertise",
+        "Include feedback loop for iterative learning"
+      ],
+      "mvp_for_this_project": {
+        "features": [
+          "Live pronunciation + pacing guidance",
+          "Adaptive drone/percussion accompaniment",
+          "Intent/mood based session adaptation",
+          "Post-session progress and next-step recommendation"
+        ],
+        "hardcoded_components_allowed": [
+          "Constrained accompaniment style set",
+          "Preset transition templates",
+          "Limited mantra library"
+        ]
+      }
+    },
+    "testing_and_analysis": {
+      "methods": [
+        "A/B comparison (static vs adaptive)",
+        "Beta-like structured user sessions",
+        "Survey + behavioral telemetry analysis"
+      ],
+      "required_feedback_signals": [
+        "Perceived flow quality",
+        "Confidence in chanting correctness",
+        "Session completion and return intent"
+      ],
+      "decision_logic": {
+        "go": "Meets minimum thresholds across desirability, feasibility, and reliability.",
+        "no_go": "Fails thresholds; return to opportunity and concept stage with revised assumptions."
+      }
+    },
+    "rollout": {
+      "strategy": [
+        "Phased release with controlled cohort",
+        "Continuous model and product monitoring",
+        "Post-deployment bias and performance checks"
+      ],
+      "operations": [
+        "Incident response playbook",
+        "Model update and retraining cadence",
+        "Regulatory/privacy change monitoring"
+      ]
+    }
+  },
+  "prd_spec": {
+    "user_story_examples": [
+      {
+        "id": "US-01",
+        "story": "As a solo practitioner, I want real-time chant correction so I can improve pronunciation without stopping flow."
+      },
+      {
+        "id": "US-02",
+        "story": "As a practitioner, I want accompaniment to adapt to my rhythm so I can sustain devotional immersion."
+      },
+      {
+        "id": "US-03",
+        "story": "As a privacy-conscious user, I want granular biometric consent controls so I stay in control of my data."
+      }
+    ],
+    "functional_requirements": [
+      {
+        "id": "FR-01",
+        "requirement": "System shall ingest voice input and generate corrective pronunciation/rhythm feedback in-session."
+      },
+      {
+        "id": "FR-02",
+        "requirement": "System shall adapt accompaniment tempo and arrangement based on current session state."
+      },
+      {
+        "id": "FR-03",
+        "requirement": "System shall support explicit user controls (slower/faster/repeat/explain)."
+      },
+      {
+        "id": "FR-04",
+        "requirement": "System shall generate session recap with objective trend and next practice recommendation."
+      },
+      {
+        "id": "FR-05",
+        "requirement": "System shall allow biometric personalization only after explicit opt-in."
+      }
+    ],
+    "non_functional_requirements": [
+      {
+        "id": "NFR-01",
+        "requirement": "Feedback loop latency target p95 < 300 ms for core corrective events."
+      },
+      {
+        "id": "NFR-02",
+        "requirement": "Service uptime target >= 99% during active demo windows."
+      },
+      {
+        "id": "NFR-03",
+        "requirement": "Graceful fallback when biometrics unavailable or noisy."
+      },
+      {
+        "id": "NFR-04",
+        "requirement": "Explainability surface for adaptation decisions."
+      }
+    ]
+  },
+  "system_spec": {
+    "high_level_architecture": {
+      "client_layer": [
+        "Mobile/web interface",
+        "Microphone input",
+        "Consent controls",
+        "Live session controls"
+      ],
+      "real_time_orchestration_layer": [
+        "Session state manager",
+        "Context fusion module (explicit + biometric + environment)",
+        "Guardrail policy engine"
+      ],
+      "ai_reasoning_layer": [
+        "Gemini 3.0 planning and adaptation",
+        "Structured decision outputs",
+        "Response/explanation generation"
+      ],
+      "audio_intelligence_layer": [
+        "Pitch/cadence analysis",
+        "Tempo tracker",
+        "Accompaniment generator/player"
+      ],
+      "data_layer": [
+        "Telemetry event store",
+        "Consent and privacy store",
+        "Experiment and eval logging"
+      ]
+    },
+    "input_channels": {
+      "explicit": [
+        "Mood",
+        "Intention",
+        "Session duration",
+        "Tradition preference"
+      ],
+      "biometric_optional": [
+        "Heart rate",
+        "HRV/stress proxy",
+        "Breath cadence"
+      ],
+      "environmental": [
+        "Noise level",
+        "Time-of-day context",
+        "Location class"
+      ]
+    },
+    "fallback_behaviors": [
+      "No biometrics: revert to explicit input + voice-only adaptation.",
+      "Poor audio quality: reduce adaptation confidence and prompt user.",
+      "High latency event: fail open to stable accompaniment pattern."
+    ]
+  },
+  "data_privacy_ethics_spec": {
+    "data_classes": [
+      {
+        "class": "P0",
+        "description": "Account, consent, and settings metadata"
+      },
+      {
+        "class": "P1",
+        "description": "Session telemetry and interaction events"
+      },
+      {
+        "class": "P2",
+        "description": "Derived audio features (avoid raw audio persistence by default)"
+      },
+      {
+        "class": "P3",
+        "description": "Biometric signals (strict opt-in)"
+      }
+    ],
+    "privacy_defaults": [
+      "Biometric use disabled by default",
+      "Granular consent by data type",
+      "Deletion and export controls",
+      "Adaptation explanation shown to user"
+    ],
+    "responsible_ai_controls": [
+      "Bias checks across accents, voice profiles, and chanting styles",
+      "No medical diagnosis or wellness claims from biometrics",
+      "Red-team misuse scenarios for overconfident guidance",
+      "Music originality and rights checks for generated accompaniment"
+    ],
+    "compliance_considerations": [
+      "GDPR-style consent and data minimization principles",
+      "Region-aware policy hooks for future regulatory differences"
+    ]
+  },
+  "trade_space_and_strategy": {
+    "priority_order": [
+      "User trust and safety",
+      "Experience quality and latency",
+      "Growth speed and breadth"
+    ],
+    "key_tradeoffs": [
+      "Personalization depth vs privacy sensitivity",
+      "Accuracy vs real-time speed",
+      "Model complexity vs explainability",
+      "On-device processing vs cloud orchestration",
+      "Build vs buy for accompaniment components"
+    ],
+    "build_vs_buy_snapshot": {
+      "build_in_house": {
+        "pros": [
+          "Higher differentiation",
+          "More control over privacy and model behavior",
+          "Long-term strategic moat"
+        ],
+        "cons": [
+          "Higher engineering cost",
+          "Longer time-to-market",
+          "Higher initial risk"
+        ]
+      },
+      "buy_or_integrate": {
+        "pros": [
+          "Faster launch",
+          "Lower short-term implementation risk",
+          "Reduced maintenance burden initially"
+        ],
+        "cons": [
+          "Vendor dependency",
+          "Reduced customization",
+          "Potential data governance constraints"
+        ]
+      }
+    }
+  },
+  "prioritization_framework": {
+    "rice_candidates": [
+      {
+        "feature": "Real-time pronunciation coach",
+        "reach": 8,
+        "impact": 3,
+        "confidence": 0.8,
+        "effort": 3,
+        "rice_score": 6.4
+      },
+      {
+        "feature": "Adaptive AI kirtan accompaniment",
+        "reach": 7,
+        "impact": 3,
+        "confidence": 0.7,
+        "effort": 4,
+        "rice_score": 3.675
+      },
+      {
+        "feature": "Biometric-enhanced adaptation",
+        "reach": 5,
+        "impact": 2,
+        "confidence": 0.5,
+        "effort": 4,
+        "rice_score": 1.25
+      }
+    ],
+    "prioritized_for_hackathon": [
+      "Real-time pronunciation coach",
+      "Adaptive AI kirtan accompaniment",
+      "Minimal biometric opt-in path (only if time remains)"
+    ]
+  },
+  "metric_blend_and_okrs": {
+    "north_star_metric": {
+      "name": "Meaningful devotional sessions per active user per week",
+      "definition": "Session >= 10 minutes, intended practice goal completed, user value rating >= 4/5"
+    },
+    "product_health_metrics": [
+      {
+        "metric": "Session completion rate",
+        "target": ">= 70% in pilot cohort"
+      },
+      {
+        "metric": "Week-2 return rate",
+        "target": ">= 35% in pilot cohort"
+      },
+      {
+        "metric": "Flow-state self report",
+        "target": ">= 25% lift over static baseline"
+      }
+    ],
+    "system_health_metrics": [
+      {
+        "metric": "Corrective feedback latency p95",
+        "target": "< 300 ms"
+      },
+      {
+        "metric": "Session uptime",
+        "target": ">= 99%"
+      },
+      {
+        "metric": "Session error rate",
+        "target": "< 2%"
+      }
+    ],
+    "ai_proxy_metrics": [
+      {
+        "metric": "Pronunciation feedback precision",
+        "target": ">= 0.85"
+      },
+      {
+        "metric": "Pronunciation feedback recall",
+        "target": ">= 0.80"
+      },
+      {
+        "metric": "Adaptation helpfulness acceptance",
+        "target": ">= 70% yes responses"
+      }
+    ],
+    "guardrail_metrics": [
+      {
+        "metric": "User-reported confusion/discomfort",
+        "target": "< 5%"
+      },
+      {
+        "metric": "Privacy opt-out friction complaints",
+        "target": "< 3%"
+      },
+      {
+        "metric": "Overconfident guidance incidents",
+        "target": "0 high-severity"
+      }
+    ],
+    "okr_set": [
+      {
+        "objective": "Increase devotional session quality through adaptive AI guidance",
+        "north_star_kpi": "Meaningful devotional sessions per active user",
+        "key_results": [
+          "Increase session completion by 20% over static baseline",
+          "Improve flow-state self-report by 25%",
+          "Maintain p95 corrective latency under 300 ms",
+          "Maintain privacy opt-in transparency satisfaction >= 90%"
+        ]
+      }
+    ]
+  },
+  "experimentation_and_eval_plan": {
+    "experiments": [
+      {
+        "id": "EXP-01",
+        "name": "Static vs adaptive core flow",
+        "method": "A/B",
+        "hypothesis": "Adaptive guidance increases session completion and flow quality",
+        "success_criteria": [
+          ">= 20% completion lift",
+          ">= 25% flow-state lift"
+        ]
+      },
+      {
+        "id": "EXP-02",
+        "name": "Biometric augmentation value",
+        "method": "A/B",
+        "hypothesis": "Biometric augmentation improves adaptation helpfulness over explicit-only signals",
+        "success_criteria": [
+          ">= 10% adaptation helpfulness lift",
+          "No increase in trust/privacy dissatisfaction"
+        ]
+      }
+    ],
+    "evaluation_rigor": {
+      "offline": [
+        "Label a small pronunciation dataset for precision/recall checks",
+        "Simulate latency and fallback scenarios"
+      ],
+      "online": [
+        "Instrument session funnel",
+        "Run cohort-based comparison",
+        "Capture qualitative plus behavioral outcomes"
+      ],
+      "human_evaluation": [
+        "Domain practitioner review of chant quality cues",
+        "Review of explanation clarity and devotional appropriateness"
+      ]
+    }
+  },
+  "product_review_checklist": {
+    "before_review": [
+      "KPIs, milestones, user research, and market context compiled",
+      "Cross-functional attendees identified",
+      "Spec and demo shared in advance"
+    ],
+    "during_review": [
+      "Decision goal stated (go/no-go, resources, strategy)",
+      "Trade-offs and risks discussed with options",
+      "Decision owner and next actions confirmed"
+    ],
+    "after_review": [
+      "Summary with decisions and owners distributed",
+      "Follow-up milestones and validation plan scheduled"
+    ]
+  },
+  "go_no_go_gates": {
+    "user_desirability_gate": [
+      "Strong repeat-use intent from pilot users",
+      "High value perception for adaptive mode"
+    ],
+    "technical_feasibility_gate": [
+      "Latency and stability targets achieved under expected load",
+      "Fallback logic verified"
+    ],
+    "business_viability_gate": [
+      "Repeat behavior suggests durable use-case",
+      "No unresolved high-severity privacy/ethics risks"
+    ]
+  },
+  "team_and_execution": {
+    "recommended_team_shape": [
+      "Product lead",
+      "ML/AI engineer",
+      "Audio/DSP engineer",
+      "Full-stack engineer",
+      "Designer",
+      "Domain advisor (mantra/kirtan)",
+      "Trust/privacy advisor"
+    ],
+    "execution_phases": [
+      {
+        "phase": "Discovery + feasibility",
+        "duration": "2-4 weeks",
+        "outputs": [
+          "User interviews",
+          "Feasibility prototype",
+          "Risk baseline"
+        ]
+      },
+      {
+        "phase": "MVP build",
+        "duration": "6-10 weeks",
+        "outputs": [
+          "Live session engine",
+          "Adaptive guidance",
+          "Telemetry and experiment harness"
+        ]
+      },
+      {
+        "phase": "Beta + optimization",
+        "duration": "4-8 weeks",
+        "outputs": [
+          "Controlled pilot",
+          "Metric improvements",
+          "Go-to-market readiness signal"
+        ]
+      }
+    ]
+  },
+  "demo_spec": {
+    "duration_minutes": 7,
+    "narrative_steps": [
+      "User sets intention and starts chant",
+      "System detects cadence/pronunciation drift",
+      "Gemini agent adapts accompaniment and provides cue",
+      "Optional biometric signal adjusts coaching intensity",
+      "User completes session with recap and next practice plan",
+      "Dashboard shows adaptive vs baseline metric delta"
+    ],
+    "must_show_artifacts": [
+      "Live adaptation event timeline",
+      "Consent and explainability UI",
+      "Metric delta panel"
+    ]
+  },
+  "open_questions": [
+    "Which mantra set and tradition boundaries are included in first release?",
+    "What minimum wearable integration is feasible in MVP?",
+    "What rights strategy is required for generated accompaniment?",
+    "What pricing/monetization hypothesis will be tested first?"
+  ]
+}
