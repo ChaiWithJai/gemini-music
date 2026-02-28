@@ -4,22 +4,41 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Maha Mantra Learning Studio</title>
+  <meta name="theme-color" content="#0d0b08" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/poc/styles.css" />
 </head>
 <body>
+
+  <!-- Floating Navigation -->
+  <nav class="floating-nav" aria-label="Practice progress">
+    <span class="nav-wordmark">Maha Mantra <em>Studio</em></span>
+    <div class="nav-dots" aria-label="Stage progress">
+      <span class="nav-dot" data-stage="listen" title="Listen"></span>
+      <span class="nav-dot" data-stage="guided" title="Guided"></span>
+      <span class="nav-dot" data-stage="call_response" title="Call-Response"></span>
+      <span class="nav-dot" data-stage="recap" title="Recap"></span>
+      <span class="nav-dot" data-stage="independent" title="Independent"></span>
+    </div>
+  </nav>
+
   <main class="layout">
+
+    <!-- Hero -->
     <header class="hero panel">
-      <p class="kicker">Gemini Maha Mantra POC</p>
-      <h1>Maha Mantra Learning Studio</h1>
-      <p class="subtitle">
+      <div class="hero-orb" aria-hidden="true"></div>
+      <p class="kicker">Devotional Practice Platform</p>
+      <h1 class="word-reveal">Maha Mantra <em>Learning Studio</em></h1>
+      <p class="subtitle reveal-fade">
         Practice flow: 30s listen, guided follow-along, call-response with student turns, recap, and independent singing.
       </p>
     </header>
 
-    <section class="panel controls">
+    <!-- Session Setup -->
+    <section class="panel controls reveal-up">
+      <span class="section-num">01</span>
       <h2>Session Setup</h2>
       <div class="form-grid">
         <label>
@@ -34,7 +53,7 @@
             <option value="shree_vallabhacharya">Shree Vallabhacharya</option>
           </select>
         </label>
-        <button id="initSessionBtn" class="btn primary">Initialize Session</button>
+        <button id="initSessionBtn" class="btn primary">Initialize Session <span class="btn-arrow" aria-hidden="true">&rarr;</span></button>
       </div>
       <p id="sessionMeta" class="meta">Session not initialized.</p>
       <p class="meta">
@@ -42,57 +61,84 @@
       </p>
     </section>
 
-    <section class="panel video-panel">
+    <!-- Practice Player -->
+    <section class="panel video-panel reveal-up">
+      <span class="section-num">02</span>
       <h2>Practice Player</h2>
       <div id="player" class="player"></div>
       <div class="status-bar">
-        <p><span class="label">Stage:</span> <span id="currentStageLabel">Idle</span></p>
-        <p><span class="label">Turn:</span> <span id="turnLabel">-</span></p>
-        <p><span class="label">Countdown:</span> <span id="countdownLabel">-</span></p>
+        <div class="status-chip">
+          <span class="chip-label">Stage</span>
+          <span class="chip-value" id="currentStageLabel">Idle</span>
+        </div>
+        <div class="status-chip">
+          <span class="chip-label">Turn</span>
+          <span class="chip-value" id="turnLabel">-</span>
+        </div>
+        <div class="status-chip">
+          <span class="chip-label">Countdown</span>
+          <span class="chip-value" id="countdownLabel">-</span>
+        </div>
       </div>
-      <p id="micStatus" class="meta">Mic status: idle</p>
+      <div id="micStatus" class="mic-indicator">
+        <span class="mic-dot" aria-hidden="true"></span>
+        <span class="mic-text">Mic: idle</span>
+      </div>
     </section>
 
-    <section class="panel flow">
+    <!-- Practice Flow -->
+    <section class="panel flow reveal-up">
+      <span class="section-num">03</span>
       <h2>Practice Flow</h2>
-      <div class="stage-grid">
+      <div class="stage-strip">
         <article class="stage" id="stage-listen">
-          <h3>1. Listen (30s)</h3>
+          <span class="stage-num">01</span>
+          <h3>Listen (30s)</h3>
           <p>Absorb pronunciation, cadence, and phrasing before singing.</p>
-          <button id="listenBtn" class="btn primary" disabled>Start Listen</button>
+          <button id="listenBtn" class="btn primary" disabled>Start Listen <span class="btn-arrow" aria-hidden="true">&rarr;</span></button>
         </article>
 
         <article class="stage" id="stage-guided">
-          <h3>2. Guided Follow-Along</h3>
+          <span class="stage-num">02</span>
+          <h3>Guided Follow-Along</h3>
           <p>Sing with the track. We score discipline, resonance, and coherence.</p>
-          <button id="guidedBtn" class="btn" disabled>Start Guided Stage</button>
+          <button id="guidedBtn" class="btn" disabled>Start Guided</button>
         </article>
 
         <article class="stage" id="stage-call">
-          <h3>3. Call-Response</h3>
+          <span class="stage-num">03</span>
+          <h3>Call-Response</h3>
           <p>Guru turn plays audio. Student turn mutes audio and scores your response.</p>
           <button id="callResponseBtn" class="btn" disabled>Start Call-Response</button>
         </article>
 
         <article class="stage" id="stage-recap">
-          <h3>4. Performance Recap</h3>
+          <span class="stage-num">04</span>
+          <h3>Performance Recap</h3>
           <p>See stage-level scoring and feedback before solo chanting.</p>
           <button id="recapBtn" class="btn" disabled>Show Recap</button>
         </article>
 
         <article class="stage" id="stage-independent">
-          <h3>5. Independent Performance</h3>
+          <span class="stage-num">05</span>
+          <h3>Independent Performance</h3>
           <p>Sing on your own and get final scoring + Bhav check.</p>
-          <button id="independentBtn" class="btn" disabled>Start Independent Stage</button>
+          <button id="independentBtn" class="btn" disabled>Start Independent</button>
         </article>
       </div>
     </section>
 
-    <section class="panel results">
+    <!-- Scoring Output -->
+    <section class="panel results reveal-up">
+      <span class="section-num">04</span>
       <h2>Scoring Output</h2>
       <div id="resultsContainer" class="results-grid"></div>
-      <pre id="finalJson" class="json-view">No evaluation yet.</pre>
+      <details class="json-details">
+        <summary>Raw JSON Output</summary>
+        <pre id="finalJson" class="json-view">No evaluation yet.</pre>
+      </details>
     </section>
+
   </main>
 
   <script src="https://www.youtube.com/iframe_api"></script>
