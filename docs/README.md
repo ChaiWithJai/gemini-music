@@ -4,6 +4,7 @@
 
 - `runbooks/day0.md`: first-day setup, run, contribution, and merge flow
 - `runbooks/release.md`: release process, gates, and rollback
+- `runbooks/demo-rehearsal.md`: 7-minute executive demo flow and one-command rehearsal
 
 ## Architecture Decision Records (ADRs)
 
@@ -24,3 +25,9 @@
 - `rfc/RFC-001D-ecosystem-leverage.md`
 - `rfc/RFC-001F-business-signal.md`
 - `rfc/RFC-001G-eval-rigor.md`
+
+## Integration and Submission
+
+- `integrations/adapter-starter-kit.md`: wearable/content adapter starter kit
+- `contracts/north_star_metric.v1.json`: versioned north-star metric contract
+- `submission/hackathon_submission_dossier.md`: final judge-facing dossier template

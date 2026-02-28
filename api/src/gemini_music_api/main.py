@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from pathlib import Path
 from typing import Annotated
 
@@ -51,6 +52,7 @@ from .schemas import (
     WebhookSubscriptionOut,
 )
 from .services.adaptation import AdaptationContext, generate_adaptation
+from .services.ai_kirtan_contract import quality_rubric_score, verify_payload_contract
 from .services.bhav import DEFAULT_GOLDEN_PROFILE, compute_bhav, resolve_lineage
 from .services.event_contracts import validate_event_payload
 from .services.experiments import compare_adaptive_vs_static
@@ -61,6 +63,7 @@ from .services.projections import (
     build_session_summary,
     compute_business_cohorts,
     increment_ecosystem_usage,
+    process_webhook_deliveries,
     queue_webhook_deliveries,
     recompute_all_daily_projections,
     refresh_daily_projections,
@@ -76,12 +79,16 @@ app = FastAPI(
 )
 
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
+DEMO_WEB_DIR = Path(__file__).resolve().parents[2] / "web-demo"
 if WEB_DIR.exists():
     app.mount("/poc", StaticFiles(directory=str(WEB_DIR), html=True), name="poc")
 
     @app.get("/favicon.ico", include_in_schema=False)
     def favicon() -> RedirectResponse:
         return RedirectResponse(url="/poc/favicon.svg")
+
+if DEMO_WEB_DIR.exists():
+    app.mount("/demo", StaticFiles(directory=str(DEMO_WEB_DIR), html=True), name="demo")
 
 
 def _sqlite_table_exists(conn: Connection, table_name: str) -> bool:
@@ -120,6 +127,56 @@ def _apply_sqlite_compat_migrations() -> None:
                 "CREATE INDEX IF NOT EXISTS ix_session_events_source_adapter ON session_events (source_adapter)"
             )
 
+        if _sqlite_table_exists(conn, "webhook_deliveries"):
+            cols = _sqlite_table_columns(conn, "webhook_deliveries")
+            if "attempt_count" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE webhook_deliveries ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0"
+                )
+            if "max_attempts" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE webhook_deliveries ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 3"
+                )
+            if "next_attempt_at" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE webhook_deliveries ADD COLUMN next_attempt_at DATETIME"
+                )
+            if "delivered_at" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE webhook_deliveries ADD COLUMN delivered_at DATETIME"
+                )
+            if "dead_lettered_at" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE webhook_deliveries ADD COLUMN dead_lettered_at DATETIME"
+                )
+            if "last_error" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE webhook_deliveries ADD COLUMN last_error VARCHAR(500)"
+                )
+            if "dead_letter_reason" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE webhook_deliveries ADD COLUMN dead_letter_reason VARCHAR(500)"
+                )
+
+        if _sqlite_table_exists(conn, "ecosystem_usage_daily"):
+            cols = _sqlite_table_columns(conn, "ecosystem_usage_daily")
+            if "webhook_deliveries_succeeded" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE ecosystem_usage_daily ADD COLUMN webhook_deliveries_succeeded INTEGER NOT NULL DEFAULT 0"
+                )
+            if "webhook_deliveries_retrying" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE ecosystem_usage_daily ADD COLUMN webhook_deliveries_retrying INTEGER NOT NULL DEFAULT 0"
+                )
+            if "webhook_dead_letters" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE ecosystem_usage_daily ADD COLUMN webhook_dead_letters INTEGER NOT NULL DEFAULT 0"
+                )
+            if "webhook_failed_attempts" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE ecosystem_usage_daily ADD COLUMN webhook_failed_attempts INTEGER NOT NULL DEFAULT 0"
+                )
+
 
 @app.on_event("startup")
 def on_startup() -> None:
@@ -135,6 +192,15 @@ def _date_key(value: dt.datetime | dt.date) -> str:
     if isinstance(value, dt.date) and not isinstance(value, dt.datetime):
         return value.isoformat()
     return value.date().isoformat()
+
+
+def _north_star_value(row: BusinessSignalDaily | None) -> float:
+    if row is None:
+        return 0.0
+    started = max(1, int(row.sessions_started))
+    meaningful_rate = float(row.meaningful_sessions) / float(started)
+    value = meaningful_rate * float(row.adaptation_helpful_rate) * float(row.bhav_pass_rate)
+    return round(max(0.0, min(1.0, value)), 4)
 
 
 def _must_get_user(db: DBSession, user_id: str) -> User:
@@ -368,19 +434,37 @@ def create_adaptation(
         ),
     )
 
-    gemini_payload = try_gemini_adaptation(
-        context={
-            "mood": ctx.mood,
-            "cadence_bpm": ctx.cadence_bpm,
-            "pronunciation_score": ctx.pronunciation_score,
-            "flow_score": ctx.flow_score,
-            "heart_rate": ctx.heart_rate,
-            "noise_level_db": ctx.noise_level_db,
-            "session_id": session_id,
-            "mantra_key": session.mantra_key,
-        }
-    )
+    gemini_error: str | None = None
+    try:
+        gemini_payload = try_gemini_adaptation(
+            context={
+                "mood": ctx.mood,
+                "cadence_bpm": ctx.cadence_bpm,
+                "pronunciation_score": ctx.pronunciation_score,
+                "flow_score": ctx.flow_score,
+                "heart_rate": ctx.heart_rate,
+                "noise_level_db": ctx.noise_level_db,
+                "session_id": session_id,
+                "mantra_key": session.mantra_key,
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        gemini_payload = None
+        gemini_error = str(exc)
     decision_payload = gemini_payload if gemini_payload is not None else generate_adaptation(ctx)
+    if gemini_error:
+        decision_payload.setdefault("adaptation_json", {}).setdefault("fallback", {})["reason"] = (
+            f"gemini_transient_error:{gemini_error}"
+        )
+    contract_ok, contract_errors = verify_payload_contract(decision_payload)
+    if not contract_ok:
+        decision_payload = generate_adaptation(ctx)
+        decision_payload.setdefault("adaptation_json", {}).setdefault("contract", {})["fallback_from_invalid_payload"] = True
+        decision_payload["adaptation_json"]["contract"]["errors"] = contract_errors
+    decision_payload.setdefault("adaptation_json", {}).setdefault("contract", {})["quality_score"] = round(
+        quality_rubric_score(decision_payload),
+        3,
+    )
     decision = AdaptationDecision(
         session_id=session_id,
         reason=decision_payload["reason"],
@@ -714,6 +798,94 @@ def experiment_adaptive_vs_static(payload: ExperimentCompareRequest) -> Experime
 @app.get("/v1/analytics/business-cohorts")
 def get_business_cohorts(db: Annotated[DBSession, Depends(get_db)]) -> dict:
     return compute_business_cohorts(db)
+
+
+@app.get("/v1/analytics/business-signal/north-star")
+def get_north_star_metric(db: Annotated[DBSession, Depends(get_db)]) -> dict:
+    row = db.scalars(
+        select(BusinessSignalDaily).order_by(BusinessSignalDaily.date_key.desc())
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No business signals available")
+
+    contract_path = Path(__file__).resolve().parents[3] / "docs" / "contracts" / "north_star_metric.v1.json"
+    contract: dict = {}
+    if contract_path.exists():
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+
+    started = max(1, int(row.sessions_started))
+    components = {
+        "meaningful_session_rate": round(float(row.meaningful_sessions) / float(started), 4),
+        "adaptation_helpful_rate": round(float(row.adaptation_helpful_rate), 4),
+        "bhav_pass_rate": round(float(row.bhav_pass_rate), 4),
+    }
+    return {
+        "date_key": row.date_key,
+        "metric_id": contract.get("metric_id", "NSM-001"),
+        "version": contract.get("version", "1.0.0"),
+        "value": _north_star_value(row),
+        "components": components,
+        "formula": contract.get("formula"),
+    }
+
+
+@app.get("/v1/analytics/business-signal/attribution")
+def get_business_signal_attribution(db: Annotated[DBSession, Depends(get_db)]) -> dict:
+    rows = db.scalars(
+        select(BusinessSignalDaily).order_by(BusinessSignalDaily.date_key.desc()).limit(7)
+    ).all()
+    if not rows:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No business signals available")
+
+    ordered = list(reversed(rows))
+    timeline = []
+    for row in ordered:
+        started = max(1, int(row.sessions_started))
+        meaningful_rate = round(float(row.meaningful_sessions) / float(started), 4)
+        timeline.append(
+            {
+                "date_key": row.date_key,
+                "sessions_started": row.sessions_started,
+                "sessions_completed": row.sessions_completed,
+                "meaningful_sessions": row.meaningful_sessions,
+                "meaningful_session_rate": meaningful_rate,
+                "day7_returning_users": row.day7_returning_users,
+                "north_star_value": _north_star_value(row),
+            }
+        )
+
+    first = timeline[0]
+    last = timeline[-1]
+    return {
+        "window_days": len(timeline),
+        "timeline": timeline,
+        "trend": {
+            "meaningful_session_rate_delta": round(
+                float(last["meaningful_session_rate"]) - float(first["meaningful_session_rate"]),
+                4,
+            ),
+            "day7_returning_users_delta": int(last["day7_returning_users"]) - int(first["day7_returning_users"]),
+            "north_star_delta": round(
+                float(last["north_star_value"]) - float(first["north_star_value"]),
+                4,
+            ),
+        },
+    }
+
+
+@app.post("/v1/admin/webhooks/process")
+def process_webhooks(
+    db: Annotated[DBSession, Depends(get_db)],
+    batch_size: int = 100,
+    ignore_schedule: bool = False,
+) -> dict:
+    result = process_webhook_deliveries(
+        db,
+        batch_size=max(1, min(batch_size, 1000)),
+        ignore_schedule=ignore_schedule,
+    )
+    db.commit()
+    return result
 
 
 @app.post("/v1/admin/projections/recompute")

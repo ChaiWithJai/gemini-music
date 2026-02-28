@@ -1,0 +1,19 @@
+{
+  "metric_id": "NSM-001",
+  "version": "1.0.0",
+  "name": "Meaningful Adaptive Practice Index",
+  "description": "Composite north-star metric combining meaningful-session rate, adaptation helpfulness, and Bhav pass quality.",
+  "formula": "(meaningful_sessions / max(1, sessions_started)) * adaptation_helpful_rate * bhav_pass_rate",
+  "inputs": [
+    "meaningful_sessions",
+    "sessions_started",
+    "adaptation_helpful_rate",
+    "bhav_pass_rate"
+  ],
+  "output_range": "0.0 - 1.0",
+  "owner": "product-analytics",
+  "notes": [
+    "Computed per day and trended weekly.",
+    "Used for release evidence and judge narrative in business signal track."
+  ]
+}

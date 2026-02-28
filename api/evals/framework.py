@@ -52,6 +52,9 @@ DIMENSIONS: list[DimensionConfig] = [
             "adaptive_delta_observed",
             "user_metric_projection",
             "bhav_composite_eval",
+            "stage_mastery_rubric",
+            "stage_progression_delta",
+            "ai_kirtan_quality_rubric",
         ],
         manual_key="user_value_proof_manual",
         automated_weight=0.6,
@@ -80,6 +83,8 @@ DIMENSIONS: list[DimensionConfig] = [
             "ecosystem_export_surface",
             "ecosystem_wearable_adapter",
             "ecosystem_content_adapter",
+            "adapter_starter_kit_verified",
+            "webhook_reliability_observed",
         ],
         manual_key="ecosystem_leverage_manual",
         automated_weight=0.9,
@@ -108,6 +113,8 @@ DIMENSIONS: list[DimensionConfig] = [
             "business_kpi_projection",
             "business_experiment_ci",
             "business_cohort_export",
+            "north_star_metric_contract",
+            "business_trend_deltas_present",
         ],
         manual_key="business_signal_manual",
         automated_weight=0.9,
@@ -128,6 +135,8 @@ DIMENSIONS: list[DimensionConfig] = [
             "eval_confidence_bounds",
             "eval_variance_reporting",
             "eval_drift_guard",
+            "chaos_reliability_suite",
+            "seed_reproducibility_stable",
         ],
         manual_key="eval_rigor_manual",
         automated_weight=0.9,
@@ -232,7 +241,7 @@ def compute_scorecard(
     )
 
     total_score = round(total_score, 2)
-    priority_ready = total_score >= 85 and demis_score >= 40 and sundar_score >= 40
+    priority_ready = total_score >= 93 and demis_score >= 45 and sundar_score >= 45
 
     return {
         "dimensions": dimensions,
@@ -240,9 +249,9 @@ def compute_scorecard(
         "demis_lens_score_0_to_50": demis_score,
         "sundar_lens_score_0_to_50": sundar_score,
         "thresholds": {
-            "overall_priority_min": 85,
-            "demis_lens_min": 40,
-            "sundar_lens_min": 40,
+            "overall_priority_min": 93,
+            "demis_lens_min": 45,
+            "sundar_lens_min": 45,
         },
         "priority_ready": priority_ready,
     }

@@ -1300,6 +1300,18 @@ function updateNavDots() {
       dot.classList.add("active");
     }
   });
+
+  const journeyNodes = document.querySelectorAll(".journey-node");
+  journeyNodes.forEach((node) => {
+    const key = node.dataset.stage;
+    const stageEl = key ? document.getElementById(STAGE_IDS[key]) : null;
+    node.classList.remove("active", "done");
+    if (stageEl && stageEl.classList.contains("done")) {
+      node.classList.add("done");
+    } else if (stageEl && stageEl.classList.contains("active")) {
+      node.classList.add("active");
+    }
+  });
 }
 
 function syntaxHighlightJson(json) {

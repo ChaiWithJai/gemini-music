@@ -18,7 +18,7 @@ __pycache__/
 *.db
 
 # Generated demo/eval artifacts
-api/evals/reports/*.json
+api/evals/reports/*
 api/demo/latest_demo_output.json
 
 # IDE/editor

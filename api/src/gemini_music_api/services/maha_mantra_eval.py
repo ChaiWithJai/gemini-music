@@ -12,6 +12,12 @@ STAGE_TARGETS: dict[str, dict[str, float]] = {
     "independent": {"duration_seconds": 30.0, "threshold_offset": 0.0},
 }
 
+STAGE_NEXT: dict[str, str | None] = {
+    "guided": "call_response",
+    "call_response": "independent",
+    "independent": None,
+}
+
 TARGET_BPM = 72.0
 
 
@@ -192,6 +198,16 @@ def evaluate_maha_mantra_stage(
     )
 
     cadence_target_gap = round(abs(float(metrics.cadence_bpm) - TARGET_BPM), 2)
+    mastery_threshold = thresholds["composite"]
+    mastery_gap = round(composite - mastery_threshold, 3)
+    mastery_level = "emerging"
+    if composite >= mastery_threshold + 0.08:
+        mastery_level = "mastered"
+    elif composite >= mastery_threshold:
+        mastery_level = "developing"
+
+    next_stage = STAGE_NEXT.get(stage)
+    progression_ready = composite >= mastery_threshold
     metrics_used: dict[str, Any] = {
         "signals": stage_signals,
         "cadence_bpm": round(float(metrics.cadence_bpm), 2),
@@ -200,6 +216,18 @@ def evaluate_maha_mantra_stage(
         "pitch_stability": round(float(metrics.pitch_stability), 3),
         "avg_energy": round(float(metrics.avg_energy), 3),
         "thresholds": {k: round(v, 3) for k, v in thresholds.items()},
+        "mastery": {
+            "level": mastery_level,
+            "threshold_composite": round(mastery_threshold, 3),
+            "gap_to_threshold": mastery_gap,
+            "progression_gate_passed": progression_ready,
+            "next_stage": next_stage,
+            "next_stage_hint": (
+                f"Advance to {next_stage} with the same vocal stability focus."
+                if progression_ready and next_stage
+                else "Reinforce this stage before progressing."
+            ),
+        },
     }
     if stage == "call_response":
         metrics_used["voice_ratio_student"] = round(_voice_ratio_student(metrics), 3)
