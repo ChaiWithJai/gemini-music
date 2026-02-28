@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCORECARD_REPORT = ROOT / "evals" / "reports" / "latest_report.json"
 GOAL_REPORT = ROOT / "evals" / "reports" / "project_goal_status.json"
+DRIFT_REPORT = ROOT / "evals" / "reports" / "eval_drift_snapshot.json"
 OUT_PATH = ROOT / "evals" / "reports" / "release_gate_status.json"
 
 
@@ -28,6 +29,7 @@ def _dim_score(scorecard: dict, dim_id: str) -> float:
 def main() -> int:
     scorecard = _load(SCORECARD_REPORT)
     goal = _load(GOAL_REPORT)
+    drift = _load(DRIFT_REPORT)
 
     min_total = float(os.getenv("RELEASE_MIN_SCORECARD_TOTAL", "85"))
     min_demis = float(os.getenv("RELEASE_MIN_DEMIS", "40"))
@@ -57,6 +59,12 @@ def main() -> int:
             "passed": bool(goal.get("summary", {}).get("on_track_for_hackathon_demo", False)),
             "value": goal.get("summary", {}).get("on_track_for_hackathon_demo", False),
             "min": True,
+        },
+        {
+            "name": "drift_guard",
+            "passed": drift.get("status") == "PASS",
+            "value": drift.get("status"),
+            "min": "PASS",
         },
     ]
 
