@@ -3,6 +3,7 @@
 This service implements a working data + API layer for the core hackathon stories:
 - Start a mantra session
 - Ingest live session events (idempotent)
+- Ingest user audio chunks for server-side stage scoring projections
 - Generate real-time adaptation decisions
 - End session and project progress metrics
 - Manage user consent for biometric/environmental data
@@ -156,6 +157,33 @@ curl -s -X POST http://localhost:8000/v1/maha-mantra/evaluate \
   }'
 ```
 
+### 9b) Transcript timing markers + chunk scoring projection
+```bash
+curl -s http://localhost:8000/v1/maha-mantra/timing
+
+curl -s -X POST http://localhost:8000/v1/sessions/<SESSION_ID>/audio/chunks \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "stage":"guided",
+    "chunk_id":"guided-001",
+    "seq":1,
+    "t_start_ms":48000,
+    "t_end_ms":93000,
+    "lineage":"vaishnavism",
+    "golden_profile":"maha_mantra_v1",
+    "features":{
+      "duration_seconds":45,
+      "voice_ratio_total":0.71,
+      "pitch_stability":0.84,
+      "cadence_bpm":72,
+      "cadence_consistency":0.81,
+      "avg_energy":0.5
+    }
+  }'
+
+curl -s http://localhost:8000/v1/sessions/<SESSION_ID>/stage-projections
+```
+
 Supported lineage values:
 - `sadhguru`
 - `shree_vallabhacharya`
@@ -236,9 +264,9 @@ After running the API server, open:
 
 Flow implemented in UI:
 
-- 30s listen
-- guided follow-along with scoring
-- call-response with student turn mute/scoring
+- transcript-aligned listen start/duration from `/v1/maha-mantra/timing`
+- guided follow-along with server-side chunk scoring projection
+- transcript-timed call-response with student turn mute/scoring
 - performance recap
 - independent performance + final scoring + Bhav check
 
@@ -260,4 +288,6 @@ Goal status artifact: `evals/reports/project_goal_status.json`
 - `sessions`: session lifecycle and summary projection
 - `session_events`: immutable event log
 - `adaptation_decisions`: adaptation outputs used by real-time clients
+- `audio_chunks`: append-only user audio feature windows with idempotent chunk IDs
+- `stage_score_projections`: materialized stage scoring views derived from audio chunks
 - `practice_progress`: materialized aggregate for dashboards

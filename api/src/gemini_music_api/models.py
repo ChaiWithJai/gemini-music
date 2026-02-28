@@ -118,6 +118,61 @@ class BhavEvaluation(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
 
+class AudioChunk(Base):
+    __tablename__ = "audio_chunks"
+    __table_args__ = (
+        UniqueConstraint("session_id", "chunk_id", name="uq_audio_chunk_session_chunk"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
+    stage: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    round_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chunk_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    t_start_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    t_end_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    sample_rate_hz: Mapped[int] = mapped_column(Integer, nullable=False, default=16000)
+    encoding: Mapped[str] = mapped_column(String(40), nullable=False, default="browser_metrics_v1")
+    blob_uri: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    lineage_id: Mapped[str] = mapped_column(String(60), nullable=False, default="vaishnavism")
+    golden_profile: Mapped[str] = mapped_column(String(40), nullable=False, default="maha_mantra_v1")
+    features_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    metrics_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    ingested_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+
+class StageScoreProjection(Base):
+    __tablename__ = "stage_score_projections"
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id",
+            "stage",
+            "lineage_id",
+            "golden_profile",
+            name="uq_stage_score_projection",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
+    stage: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    lineage_id: Mapped[str] = mapped_column(String(60), nullable=False, default="vaishnavism", index=True)
+    golden_profile: Mapped[str] = mapped_column(String(40), nullable=False, default="maha_mantra_v1")
+    discipline: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    resonance: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    coherence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    composite: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    passes_golden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    coverage_ratio: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    source_chunk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    metrics_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    feedback_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+
 class WebhookSubscription(Base):
     __tablename__ = "webhook_subscriptions"
 

@@ -1,5 +1,30 @@
 const VIDEO_ID = "lZXeUhUc8PM";
 const GOLDEN_PROFILE = "maha_mantra_v1";
+const TIMING_API_PATH = "/v1/maha-mantra/timing";
+
+const DEFAULT_TIMING_PLAN = {
+  track_id: "maha_mantra_lZXeUhUc8PM_v1",
+  source: "fallback_static_v1",
+  video_id: VIDEO_ID,
+  listen_stage: { start_sec: 18, end_sec: 48, duration_sec: 30 },
+  guided_stage: { start_sec: 48, end_sec: 93, duration_sec: 45 },
+  call_response_stage: {
+    start_sec: 138,
+    end_sec: 186,
+    duration_sec: 48,
+    rounds: [
+      { round: 1, guru_start: 138, guru_end: 141, student_start: 141, student_end: 144 },
+      { round: 2, guru_start: 144, guru_end: 147, student_start: 147, student_end: 150 },
+      { round: 3, guru_start: 150, guru_end: 153, student_start: 153, student_end: 156 },
+      { round: 4, guru_start: 156, guru_end: 159, student_start: 159, student_end: 162 },
+      { round: 5, guru_start: 162, guru_end: 165, student_start: 165, student_end: 168 },
+      { round: 6, guru_start: 168, guru_end: 171, student_start: 171, student_end: 174 },
+      { round: 7, guru_start: 174, guru_end: 177, student_start: 177, student_end: 180 },
+      { round: 8, guru_start: 180, guru_end: 183, student_start: 183, student_end: 186 },
+    ],
+  },
+  independent_stage: { duration_sec: 30 },
+};
 
 const STAGE_IDS = {
   listen: "stage-listen",
@@ -75,6 +100,10 @@ const state = {
   fallbackMasterGain: null,
   fallbackNodes: [],
   queueEventKey: null,
+  timingPlan: DEFAULT_TIMING_PLAN,
+  timingLoaded: false,
+  timingLoadPromise: null,
+  audioChunkSeq: 0,
 };
 
 const els = {
@@ -98,6 +127,7 @@ const els = {
   queueLaterCopy: document.getElementById("queueLaterCopy"),
   queuePrimaryBtn: document.getElementById("queuePrimaryBtn"),
   mediaStatus: document.getElementById("mediaStatus"),
+  timingMeta: document.getElementById("timingMeta"),
   useFallbackBtn: document.getElementById("useFallbackBtn"),
   retryYoutubeBtn: document.getElementById("retryYoutubeBtn"),
   playerContainer: document.getElementById("player"),
@@ -207,6 +237,63 @@ function setMediaMode(mode) {
   if (els.useFallbackBtn) {
     els.useFallbackBtn.disabled = mode === "fallback";
   }
+}
+
+function secToClock(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+function applyTimingCopy() {
+  const plan = state.timingPlan || DEFAULT_TIMING_PLAN;
+  const listen = plan.listen_stage || DEFAULT_TIMING_PLAN.listen_stage;
+  const guided = plan.guided_stage || DEFAULT_TIMING_PLAN.guided_stage;
+  const call = plan.call_response_stage || DEFAULT_TIMING_PLAN.call_response_stage;
+  const independent = plan.independent_stage || DEFAULT_TIMING_PLAN.independent_stage;
+
+  const rounds = Array.isArray(call.rounds) ? call.rounds.length : 0;
+  STAGE_COPY.listen.title = `Listen (${Math.round(listen.duration_sec)}s)`;
+  STAGE_COPY.listen.next = `Next in ${Math.round(guided.duration_sec)}s guided follow-along.`;
+  STAGE_COPY.guided.next = `Next: ${rounds || 1} transcript-aligned call-response rounds.`;
+  STAGE_COPY.call_response.now = "You're here: guru and student turns are transcript-timed.";
+  STAGE_COPY.call_response.next = "Next: inspect recap before solo performance.";
+
+  if (els.queueNextTitle) {
+    els.queueNextTitle.textContent = STAGE_COPY.listen.title;
+  }
+
+  if (els.timingMeta) {
+    const sourceLabel = plan.source || "unknown_source";
+    els.timingMeta.textContent = `Timing source: ${sourceLabel} | listen @ ${secToClock(listen.start_sec)} | call-response @ ${secToClock(call.start_sec)}`;
+  }
+
+  const subtitle = document.querySelector(".subtitle");
+  if (subtitle) {
+    subtitle.textContent = `Practice flow: ${Math.round(listen.duration_sec)}s listen (@${secToClock(listen.start_sec)}), ${Math.round(guided.duration_sec)}s guided, transcript-timed call-response, recap, and ${Math.round(independent.duration_sec)}s independent singing.`;
+  }
+}
+
+async function loadTimingPlan() {
+  try {
+    const plan = await api(TIMING_API_PATH);
+    state.timingPlan = plan;
+    state.timingLoaded = true;
+  } catch (err) {
+    console.warn("timing plan fetch failed; using fallback", err);
+    state.timingPlan = DEFAULT_TIMING_PLAN;
+    state.timingLoaded = false;
+  }
+  applyTimingCopy();
+}
+
+function ensureTimingPlan() {
+  if (state.timingLoadPromise) {
+    return state.timingLoadPromise;
+  }
+  state.timingLoadPromise = loadTimingPlan();
+  return state.timingLoadPromise;
 }
 
 function syncStageCtaLabels() {
@@ -788,8 +875,10 @@ class VoiceCapture {
 
     this.totalFrames = 0;
     this.voicedFrames = 0;
+    this.unvoicedFrames = 0;
     this.energySum = 0;
     this.voicedEnergySum = 0;
+    this.unvoicedEnergySum = 0;
     this.onsets = [];
     this.pitchSamples = [];
     this.lastVoiced = false;
@@ -827,6 +916,9 @@ class VoiceCapture {
     if (voiced) {
       this.voicedFrames += 1;
       this.voicedEnergySum += rms;
+    } else {
+      this.unvoicedFrames += 1;
+      this.unvoicedEnergySum += rms;
     }
 
     if (voiced && !this.lastVoiced) {
@@ -895,6 +987,8 @@ class VoiceCapture {
     const cadenceConsistency = normalizeCadenceConsistency(this.onsets);
 
     const voicedMeanEnergy = this.voicedFrames > 0 ? this.voicedEnergySum / this.voicedFrames : 0;
+    const unvoicedMeanEnergy = this.unvoicedFrames > 0 ? this.unvoicedEnergySum / this.unvoicedFrames : 0.0001;
+    const snrDb = 20 * Math.log10((voicedMeanEnergy + 1e-6) / (unvoicedMeanEnergy + 1e-6));
     const avgEnergy = clamp01(voicedMeanEnergy / 0.12);
 
     const studentStats = this.phaseStats.student;
@@ -917,6 +1011,9 @@ class VoiceCapture {
       cadence_bpm: Number(Math.max(20, Math.min(220, cadenceBpm)).toFixed(2)),
       cadence_consistency: Number(clamp01(cadenceConsistency).toFixed(3)),
       avg_energy: Number(clamp01(avgEnergy).toFixed(3)),
+      total_frames: this.totalFrames,
+      voiced_frames: this.voicedFrames,
+      snr_db: Number(Math.max(-20, Math.min(120, snrDb)).toFixed(2)),
     };
   }
 }
@@ -945,40 +1042,82 @@ function pauseVideo() {
   state.player.pauseVideo();
 }
 
-async function evaluateStage(stage, metrics) {
-  const result = await api("/v1/maha-mantra/evaluate", {
+async function evaluateStage(stage, metrics, stageWindow = null) {
+  if (!state.sessionId) {
+    throw new Error("Session must be initialized before scoring.");
+  }
+
+  state.audioChunkSeq += 1;
+  const startSec = stageWindow && Number.isFinite(stageWindow.start_sec) ? stageWindow.start_sec : 0;
+  const endSec = stageWindow && Number.isFinite(stageWindow.end_sec)
+    ? stageWindow.end_sec
+    : (startSec + Number(metrics.duration_seconds || 0));
+
+  const chunkResp = await api(`/v1/sessions/${state.sessionId}/audio/chunks`, {
     method: "POST",
     body: JSON.stringify({
       stage,
+      chunk_id: `${stage}-${state.audioChunkSeq}-${Date.now()}`,
+      seq: state.audioChunkSeq,
+      t_start_ms: Math.max(0, Math.round(startSec * 1000)),
+      t_end_ms: Math.max(1, Math.round(endSec * 1000)),
+      sample_rate_hz: 16000,
+      encoding: "browser_metrics_v1",
       lineage: state.lineage,
       golden_profile: GOLDEN_PROFILE,
-      session_id: state.sessionId,
-      metrics,
+      features: {
+        duration_seconds: metrics.duration_seconds,
+        total_frames: metrics.total_frames,
+        voiced_frames: metrics.voiced_frames,
+        voice_ratio_total: metrics.voice_ratio_total,
+        voice_ratio_student: metrics.voice_ratio_student,
+        voice_ratio_guru: metrics.voice_ratio_guru,
+        pitch_stability: metrics.pitch_stability,
+        cadence_bpm: metrics.cadence_bpm,
+        cadence_consistency: metrics.cadence_consistency,
+        avg_energy: metrics.avg_energy,
+        snr_db: metrics.snr_db,
+      },
     }),
   });
+
+  const projection = chunkResp.projection;
+  const result = {
+    stage: projection.stage,
+    lineage_id: projection.lineage_id,
+    golden_profile: projection.golden_profile,
+    discipline: projection.discipline,
+    resonance: projection.resonance,
+    coherence: projection.coherence,
+    composite: projection.composite,
+    passes_golden: projection.passes_golden,
+    feedback: projection.feedback_json || [],
+    metrics_used: projection.metrics_json || {},
+  };
 
   state.stageResults[stage] = result;
   renderResults();
 
-  if (state.sessionId) {
-    await api(`/v1/sessions/${state.sessionId}/events`, {
-      method: "POST",
-      body: JSON.stringify({
-        event_type: "maha_mantra_stage_eval",
-        client_event_id: `maha:${stage}:${Date.now()}`,
-        payload: {
-          stage,
-          practice_seconds: metrics.duration_seconds,
-          flow_score: result.resonance,
-          pronunciation_score: result.coherence,
-          cadence_bpm: metrics.cadence_bpm,
-          adaptation_helpful: true,
-          metrics,
-          result,
-        },
-      }),
-    });
-  }
+  await api(`/v1/sessions/${state.sessionId}/events`, {
+    method: "POST",
+    body: JSON.stringify({
+      event_type: "maha_mantra_stage_eval",
+      client_event_id: `maha:${stage}:${Date.now()}`,
+      payload: {
+        stage,
+        practice_seconds: metrics.duration_seconds,
+        flow_score: result.resonance,
+        pronunciation_score: result.coherence,
+        cadence_bpm: metrics.cadence_bpm,
+        adaptation_helpful: true,
+        chunk_id: chunkResp.chunk_id,
+        chunk_confidence: chunkResp.confidence,
+        score_confidence: projection.confidence,
+        metrics,
+        result,
+      },
+    }),
+  });
 
   return result;
 }
@@ -1060,6 +1199,7 @@ async function runStep(stepFn) {
 }
 
 async function initSession() {
+  await ensureTimingPlan();
   const displayName = els.displayName.value.trim() || "Hackathon Singer";
   state.lineage = els.lineageSelect.value;
 
@@ -1095,6 +1235,7 @@ async function initSession() {
   state.userId = user.id;
   state.sessionId = session.id;
   state.queueEventKey = null;
+  state.audioChunkSeq = 0;
   state.stageResults = {};
   state.finalArtifacts = {};
   STAGE_ORDER.forEach((stageKey) => {
@@ -1117,18 +1258,20 @@ async function initSession() {
   els.initSessionBtn.classList.remove("primary");
   els.initSessionBtn.textContent = "Reinitialize Session";
 
-  setStageLabel("Ready for 30-second listening");
+  const listenWindow = state.timingPlan.listen_stage || DEFAULT_TIMING_PLAN.listen_stage;
+  setStageLabel(`Ready for ${Math.round(listenWindow.duration_sec)}s listening at ${secToClock(listenWindow.start_sec)}`);
   allowButton(els.listenBtn);
   updateInteractionQueue();
 }
 
 async function runListenStage() {
+  const listenWindow = state.timingPlan.listen_stage || DEFAULT_TIMING_PLAN.listen_stage;
   setActiveStage("listen");
   setStageLabel("Stage 1: Listen");
   setTurn("Guru lead");
-  await playAt(0, false);
+  await playAt(listenWindow.start_sec, false);
 
-  await runCountdown(30, (remaining) => {
+  await runCountdown(Math.max(1, Math.round(listenWindow.duration_sec)), (remaining) => {
     setCountdown(`${remaining}s`);
   });
 
@@ -1142,6 +1285,7 @@ async function runListenStage() {
 }
 
 async function runGuidedStage() {
+  const guidedWindow = state.timingPlan.guided_stage || DEFAULT_TIMING_PLAN.guided_stage;
   setActiveStage("guided");
   setStageLabel("Stage 2: Guided follow-along");
   setTurn("Sing with track");
@@ -1149,9 +1293,9 @@ async function runGuidedStage() {
 
   const capture = new VoiceCapture(() => "guided");
   await capture.start();
-  await playAt(30, false);
+  await playAt(guidedWindow.start_sec, false);
 
-  await runCountdown(45, (remaining) => {
+  await runCountdown(Math.max(1, Math.round(guidedWindow.duration_sec)), (remaining) => {
     setCountdown(`${remaining}s`);
   });
 
@@ -1159,7 +1303,7 @@ async function runGuidedStage() {
   const metrics = await capture.stop();
   setMicStatus("stopped");
 
-  await evaluateStage("guided", metrics);
+  await evaluateStage("guided", metrics, guidedWindow);
 
   markStageDone("guided");
   setStageLabel("Guided stage scored");
@@ -1180,33 +1324,46 @@ async function callTurn({ label, phase, muted, round, totalRounds, seconds }) {
 }
 
 async function runCallResponseStage() {
+  const callWindow = state.timingPlan.call_response_stage || DEFAULT_TIMING_PLAN.call_response_stage;
   setActiveStage("call_response");
   setStageLabel("Stage 3: Call-response");
   setMicStatus("capturing");
 
   const capture = new VoiceCapture(() => state.callPhase);
   await capture.start();
-  await playAt(76, false);
+  await playAt(callWindow.start_sec, false);
 
-  const rounds = 4;
-  const turnSeconds = 5;
+  const rounds = Array.isArray(callWindow.rounds) && callWindow.rounds.length
+    ? callWindow.rounds
+    : [
+        {
+          round: 1,
+          guru_start: callWindow.start_sec,
+          guru_end: callWindow.start_sec + 3,
+          student_start: callWindow.start_sec + 3,
+          student_end: callWindow.start_sec + 6,
+        },
+      ];
 
-  for (let round = 1; round <= rounds; round += 1) {
+  for (let idx = 0; idx < rounds.length; idx += 1) {
+    const round = rounds[idx];
+    const guruSeconds = Math.max(1, Math.round((round.guru_end || 0) - (round.guru_start || 0)));
+    const studentSeconds = Math.max(1, Math.round((round.student_end || 0) - (round.student_start || 0)));
     await callTurn({
       label: "Guru",
       phase: "guru",
       muted: false,
-      round,
-      totalRounds: rounds,
-      seconds: turnSeconds,
+      round: idx + 1,
+      totalRounds: rounds.length,
+      seconds: guruSeconds,
     });
     await callTurn({
       label: "Student",
       phase: "student",
       muted: true,
-      round,
-      totalRounds: rounds,
-      seconds: turnSeconds,
+      round: idx + 1,
+      totalRounds: rounds.length,
+      seconds: studentSeconds,
     });
   }
 
@@ -1215,7 +1372,7 @@ async function runCallResponseStage() {
   const metrics = await capture.stop();
   setMicStatus("stopped");
 
-  await evaluateStage("call_response", metrics);
+  await evaluateStage("call_response", metrics, callWindow);
 
   markStageDone("call_response");
   setStageLabel("Call-response scored");
@@ -1238,6 +1395,7 @@ async function showRecap() {
 }
 
 async function runIndependentStage() {
+  const independentWindow = state.timingPlan.independent_stage || DEFAULT_TIMING_PLAN.independent_stage;
   setActiveStage("independent");
   setStageLabel("Stage 5: Independent performance");
   setTurn("Solo chanting");
@@ -1248,14 +1406,17 @@ async function runIndependentStage() {
 
   setMediaMuted(true);
 
-  await runCountdown(30, (remaining) => {
+  await runCountdown(Math.max(1, Math.round(independentWindow.duration_sec)), (remaining) => {
     setCountdown(`${remaining}s`);
   });
 
   const metrics = await capture.stop();
   setMicStatus("stopped");
 
-  await evaluateStage("independent", metrics);
+  await evaluateStage("independent", metrics, {
+    start_sec: 0,
+    end_sec: Number(independentWindow.duration_sec),
+  });
   await finalizeSession();
 
   markStageDone("independent");
@@ -1425,5 +1586,8 @@ function setInitialUiState() {
 
 bindEvents();
 setInitialUiState();
+ensureTimingPlan().catch((err) => {
+  console.warn("timing initialization failed", err);
+});
 initWordReveal();
 initRevealAnimations();

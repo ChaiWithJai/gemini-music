@@ -8,7 +8,7 @@ from .bhav import DEFAULT_GOLDEN_PROFILE, LineageProfile, clamp01
 
 STAGE_TARGETS: dict[str, dict[str, float]] = {
     "guided": {"duration_seconds": 45.0, "threshold_offset": -0.08},
-    "call_response": {"duration_seconds": 40.0, "threshold_offset": -0.04},
+    "call_response": {"duration_seconds": 48.0, "threshold_offset": -0.04},
     "independent": {"duration_seconds": 30.0, "threshold_offset": 0.0},
 }
 
