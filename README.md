@@ -21,6 +21,7 @@ cd api
 make run
 # open http://localhost:8000/docs
 # open http://localhost:8000/poc/
+# open http://localhost:8000/demo/
 ```
 
 4. Make a contribution on a feature branch.

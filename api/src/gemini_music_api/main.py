@@ -79,12 +79,16 @@ app = FastAPI(
 )
 
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
+DEMO_WEB_DIR = Path(__file__).resolve().parents[2] / "web-demo"
 if WEB_DIR.exists():
     app.mount("/poc", StaticFiles(directory=str(WEB_DIR), html=True), name="poc")
 
     @app.get("/favicon.ico", include_in_schema=False)
     def favicon() -> RedirectResponse:
         return RedirectResponse(url="/poc/favicon.svg")
+
+if DEMO_WEB_DIR.exists():
+    app.mount("/demo", StaticFiles(directory=str(DEMO_WEB_DIR), html=True), name="demo")
 
 
 def _sqlite_table_exists(conn: Connection, table_name: str) -> bool:
