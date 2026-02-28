@@ -265,6 +265,9 @@ def test_audio_chunk_ingest_and_projection(client: TestClient) -> None:
     assert first_body["projection"]["source_chunk_count"] == 1
     assert first_body["projection"]["coverage_ratio"] >= 0.95
     assert first_body["projection"]["confidence"] > 0
+    assert first_body["projection"]["scorer_source"] == "deterministic"
+    assert first_body["projection"]["scorer_model"] is None
+    assert first_body["projection"]["scorer_confidence"] == 0
     assert first_body["projection"]["composite"] >= 0.7
 
     second = client.post(f"/v1/sessions/{session_id}/audio/chunks", json=payload)
@@ -280,6 +283,146 @@ def test_audio_chunk_ingest_and_projection(client: TestClient) -> None:
     assert len(projections) == 1
     assert projections[0]["stage"] == "guided"
     assert projections[0]["source_chunk_count"] == 1
+    assert projections[0]["scorer_source"] == "deterministic"
+
+
+def test_audio_chunk_uses_gemini_scorer_when_available(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from gemini_music_api.services import audio_scoring
+
+    def _fake_gemini_score(**_: object) -> tuple[dict[str, object], dict[str, object]]:
+        return (
+            {
+                "discipline": 0.92,
+                "resonance": 0.88,
+                "coherence": 0.9,
+                "composite": 0.9,
+                "passes_golden": True,
+                "feedback": ["Gemini scorer: strong devotional steadiness."],
+                "scorer_confidence": 0.91,
+                "evidence_json": {"mode": "stubbed"},
+                "metrics_used": {"source": "gemini_stub"},
+            },
+            {
+                "attempted": True,
+                "model": "gemini-3-pro-preview",
+                "reason": "ok",
+            },
+        )
+
+    monkeypatch.setattr(audio_scoring, "try_gemini_stage_score", _fake_gemini_score)
+
+    user_resp = client.post("/v1/users", json={"display_name": "Gemini Score User"})
+    assert user_resp.status_code == 201
+    user_id = user_resp.json()["id"]
+
+    session_resp = client.post(
+        "/v1/sessions",
+        json={
+            "user_id": user_id,
+            "intention": "Gemini chunk scoring flow",
+            "mantra_key": "maha_mantra_hare_krishna_hare_rama",
+            "mood": "focused",
+            "target_duration_minutes": 3,
+        },
+    )
+    assert session_resp.status_code == 201
+    session_id = session_resp.json()["id"]
+
+    payload = {
+        "stage": "guided",
+        "chunk_id": "guided-gemini-001",
+        "seq": 1,
+        "t_start_ms": 48000,
+        "t_end_ms": 93000,
+        "sample_rate_hz": 16000,
+        "encoding": "browser_metrics_v1",
+        "lineage": "vaishnavism",
+        "golden_profile": "maha_mantra_v1",
+        "features": {
+            "duration_seconds": 45,
+            "total_frames": 450,
+            "voiced_frames": 320,
+            "voice_ratio_total": 0.71,
+            "pitch_stability": 0.84,
+            "cadence_bpm": 72,
+            "cadence_consistency": 0.81,
+            "avg_energy": 0.5,
+            "snr_db": 18,
+        },
+    }
+
+    ingest_resp = client.post(f"/v1/sessions/{session_id}/audio/chunks", json=payload)
+    assert ingest_resp.status_code == 201
+    projection = ingest_resp.json()["projection"]
+    assert projection["scorer_source"] == "gemini"
+    assert projection["scorer_model"] == "gemini-3-pro-preview"
+    assert projection["scorer_confidence"] == 0.91
+    assert projection["feedback_json"][0].startswith("Gemini scorer:")
+    assert projection["metrics_json"]["source"] == "gemini_stub"
+
+
+def test_audio_chunk_falls_back_when_gemini_scorer_invalid(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from gemini_music_api.services import audio_scoring
+
+    def _fake_failed_gemini_score(**_: object) -> tuple[None, dict[str, object]]:
+        return (
+            None,
+            {
+                "attempted": True,
+                "model": "gemini-3-flash-preview",
+                "reason": "invalid_payload",
+            },
+        )
+
+    monkeypatch.setattr(audio_scoring, "try_gemini_stage_score", _fake_failed_gemini_score)
+
+    user_resp = client.post("/v1/users", json={"display_name": "Fallback User"})
+    assert user_resp.status_code == 201
+    user_id = user_resp.json()["id"]
+
+    session_resp = client.post(
+        "/v1/sessions",
+        json={
+            "user_id": user_id,
+            "intention": "Fallback chunk scoring flow",
+            "mantra_key": "maha_mantra_hare_krishna_hare_rama",
+            "mood": "focused",
+            "target_duration_minutes": 3,
+        },
+    )
+    assert session_resp.status_code == 201
+    session_id = session_resp.json()["id"]
+
+    payload = {
+        "stage": "guided",
+        "chunk_id": "guided-fallback-001",
+        "seq": 1,
+        "t_start_ms": 48000,
+        "t_end_ms": 93000,
+        "sample_rate_hz": 16000,
+        "encoding": "browser_metrics_v1",
+        "lineage": "vaishnavism",
+        "golden_profile": "maha_mantra_v1",
+        "features": {
+            "duration_seconds": 45,
+            "total_frames": 450,
+            "voiced_frames": 320,
+            "voice_ratio_total": 0.71,
+            "pitch_stability": 0.84,
+            "cadence_bpm": 72,
+            "cadence_consistency": 0.81,
+            "avg_energy": 0.5,
+            "snr_db": 18,
+        },
+    }
+
+    ingest_resp = client.post(f"/v1/sessions/{session_id}/audio/chunks", json=payload)
+    assert ingest_resp.status_code == 201
+    projection = ingest_resp.json()["projection"]
+    assert projection["scorer_source"] == "deterministic"
+    assert projection["scorer_model"] == "gemini-3-flash-preview"
+    assert projection["scorer_confidence"] == 0
+    assert projection["scorer_evidence_json"]["fallback_reason"] == "invalid_payload"
 
 
 def test_poc_static_ui_served(client: TestClient) -> None:

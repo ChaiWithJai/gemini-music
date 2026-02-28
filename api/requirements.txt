@@ -1,4 +1,5 @@
 fastapi==0.115.8
+google-genai==1.65.0
 uvicorn==0.34.0
 sqlalchemy==2.0.38
 pydantic==2.10.6

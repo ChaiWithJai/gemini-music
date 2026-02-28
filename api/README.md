@@ -26,6 +26,17 @@ make run
 
 Open docs: `http://localhost:8000/docs`
 
+Gemini-backed stage scoring (optional):
+
+```bash
+export USE_GEMINI_SCORING=true
+export GEMINI_SCORING_MODEL=gemini-3-flash-preview
+export GEMINI_API_KEY=<your_key>
+```
+
+When enabled, `/v1/sessions/{session_id}/audio/chunks` and `/v1/sessions/{session_id}/stage-projections`
+include scorer provenance fields (`scorer_source`, `scorer_model`, `scorer_confidence`, `scorer_evidence_json`).
+
 ## Environment policy (DevOps guardrail)
 
 - Canonical runtime: **Python 3.13**

@@ -185,6 +185,28 @@ def _apply_sqlite_compat_migrations() -> None:
                     "ALTER TABLE ecosystem_usage_daily ADD COLUMN webhook_failed_attempts INTEGER NOT NULL DEFAULT 0"
                 )
 
+        if _sqlite_table_exists(conn, "stage_score_projections"):
+            cols = _sqlite_table_columns(conn, "stage_score_projections")
+            if "scorer_source" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE stage_score_projections ADD COLUMN scorer_source VARCHAR(20) NOT NULL DEFAULT 'deterministic'"
+                )
+            if "scorer_model" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE stage_score_projections ADD COLUMN scorer_model VARCHAR(80)"
+                )
+            if "scorer_confidence" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE stage_score_projections ADD COLUMN scorer_confidence FLOAT NOT NULL DEFAULT 0"
+                )
+            if "scorer_evidence_json" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE stage_score_projections ADD COLUMN scorer_evidence_json JSON NOT NULL DEFAULT '{}'"
+                )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_stage_score_projections_scorer_source ON stage_score_projections (scorer_source)"
+            )
+
 
 @app.on_event("startup")
 def on_startup() -> None:
